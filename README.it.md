@@ -2,9 +2,14 @@
 
 [English](README.md) · **Italiano**
 
-App desktop (Windows, via **Tauri**) che trasforma un prompt grezzo in varianti
-ottimizzate per diversi target AI, con anonimizzazione PII e generazione di
-scaffold di istruzioni per agenti. Nessun backend proprio: tutto gira
+Prompt Optimizer nasce da un'idea semplice: **aiutarti a scrivere buoni prompt.**
+Per farlo si appoggia al **tier gratuito di Google Gemini via API** — e proprio
+*perché* il tuo prompt viene inviato a Gemini, **anonimizza i dati sensibili che
+Gemini riceve**: le PII (email, telefono, carte) vengono rilevate e mascherate
+**sul tuo dispositivo** prima della chiamata, poi ripristinate nell'output.
+Prompt migliori, senza consegnare i tuoi dati personali al modello.
+
+App desktop (Windows, via **Tauri**) — nessun backend proprio: tutto gira
 client-side nella webview Tauri, con le tue API key salvate solo sul dispositivo.
 
 ![Prompt Optimizer — schermata principale](docs/manual-img/04.png)
@@ -13,6 +18,8 @@ client-side nella webview Tauri, con le tue API key salvate solo sul dispositivo
 [![Release](https://img.shields.io/github/v/release/CalvinTTooS/prompt-optimizer)](https://github.com/CalvinTTooS/prompt-optimizer/releases/latest)
 ![Downloads](https://img.shields.io/github/downloads/CalvinTTooS/prompt-optimizer/total)
 [![License: MIT](https://img.shields.io/github/license/CalvinTTooS/prompt-optimizer)](LICENSE)
+
+> 🤖 Sviluppato con l'assistenza dell'IA, seguendo standard di sviluppo rigidi e versionati — vedi [Sviluppo](#sviluppo).
 
 ## Scarica
 
@@ -39,6 +46,40 @@ Scarica l'ultima versione dalla pagina **[Releases](https://github.com/CalvinTTo
   piattaforma), con "istruzioni aggiuntive" visualizzabili/modificabili/
   ripristinabili per-file.
 - Notifiche **toast** in-app.
+
+## Come funziona
+
+1. **Incolli un prompt grezzo** — anche una riga buttata lì.
+2. **Le PII vengono anonimizzate localmente** (attivo di default): email,
+   numeri di telefono, carte di credito (validate con Luhn) e CCV vengono
+   rilevati e sostituiti con segnaposto tipo `[EMAIL_1]` *prima* di inviare
+   qualsiasi cosa. Gemini vede solo il testo mascherato; i valori reali vengono
+   ripristinati nell'output finale. Puoi anche mascherare a mano qualsiasi
+   testo selezionato.
+3. **Gemini lo riscrive** nei formati che spunti — ciascuno tarato su come quel
+   target legge davvero i prompt:
+   - **Claude Chat** — discorsivo, con tag XML, per le UI di chat.
+   - **Claude Cowork** — agente di workspace, con confini espliciti e punti di
+     approvazione umana.
+   - **Claude Code** — istruzioni per agente CLI (genere `CLAUDE.md`): prima
+     pianifica, poi agisce, con passi verificabili.
+   - **System + User** — divide il prompt in una parte **system** (stabile:
+     ruolo, vincoli, formato di output) e una parte **user** (il task/i dati
+     specifici), con un unico criterio: *"questa riga resterebbe identica se
+     rieseguissi il task domani con dati diversi?"* → sì → System, no → User.
+   - **File istruzioni Gemini** (`GEMINI.md`) — un file di contesto per Gemini
+     CLI: consapevole della gerarchia, indipendente dal nome file,
+     interoperabile con `AGENTS.md`.
+4. **Gli esempi few-shot** che fornisci vengono iniettati in tutti i formati
+   selezionati in una volta sola.
+5. **Rifinisci / Valuta** ogni variante con Claude o OpenAI (vedi *Provider
+   layer*), tenendo le chiavi in locale.
+6. **Scaffold strutturato** (modalità separata): da una descrizione di progetto,
+   Gemini compila solo la sezione "Progetto" di un template e l'app assembla il
+   set completo di istruzioni per agenti — `CLAUDE.md` + `GEMINI.md` +
+   `METHOD.md` + profili di piattaforma — da scaricare come cartella o zip.
+
+Tutto gira client-side nella shell Tauri; niente passa da un nostro server.
 
 ## Requisiti
 
@@ -71,9 +112,17 @@ nel mezzo.
 
 ## Sviluppo
 
-Vedi [CONTRIBUTING.md](CONTRIBUTING.md) per setup, gate di test e convenzioni.
-Metodologia e direttive di progetto: [`CLAUDE.md`](CLAUDE.md) e
-[`docs/METHOD.md`](docs/METHOD.md).
+Questo software è stato **sviluppato con l'assistenza dell'IA**, seguendo un
+insieme di standard di sviluppo rigidi e versionati — progettare prima di
+scrivere codice, un gate di test a ogni modifica, sicurezza *by design* e igiene
+del codice. Questi standard non sono impliciti: sono scritti e vivono nel repo.
+
+- [`CLAUDE.md`](CLAUDE.md) — direttive specifiche di progetto, caricate ogni sessione.
+- [`docs/METHOD.md`](docs/METHOD.md) — la metodologia di ingegneria completa e stabile.
+- [`AGENTS.md`](AGENTS.md) — note per agenti cross-tool.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — setup, gate di test e convenzioni.
+- [`docs/prompt-engineering-best-practices.md`](docs/prompt-engineering-best-practices.md)
+  — la ricerca (con fonti) dietro ogni formato di prompt.
 
 ## Contatti e segnalazioni
 

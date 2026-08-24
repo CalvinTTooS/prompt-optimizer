@@ -2,10 +2,15 @@
 
 **English** · [Italiano](README.it.md)
 
-Desktop app (Windows, via **Tauri**) that turns a raw prompt into variants
-optimized for different AI targets, with PII anonymization and generation of
-agent-instruction scaffolds. No backend of its own: everything runs client-side
-in the Tauri webview, with your API keys stored only on your device.
+Prompt Optimizer is born from a simple idea: **help you write good prompts.** To
+do that it leans on Google **Gemini's free API tier** — and precisely *because*
+your prompt is sent to Gemini, it **anonymizes the sensitive data Gemini
+receives**: PII (emails, phone numbers, cards) is detected and masked **on your
+device** before the call, then restored in the output. Better prompts, without
+handing your personal data to the model.
+
+Desktop app (Windows, via **Tauri**) — no backend of its own: everything runs
+client-side in the Tauri webview, with your API keys stored only on your device.
 
 ![Prompt Optimizer — main screen](docs/manual-img/04.png)
 
@@ -13,6 +18,8 @@ in the Tauri webview, with your API keys stored only on your device.
 [![Release](https://img.shields.io/github/v/release/CalvinTTooS/prompt-optimizer)](https://github.com/CalvinTTooS/prompt-optimizer/releases/latest)
 ![Downloads](https://img.shields.io/github/downloads/CalvinTTooS/prompt-optimizer/total)
 [![License: MIT](https://img.shields.io/github/license/CalvinTTooS/prompt-optimizer)](LICENSE)
+
+> 🤖 Developed with AI assistance, under strict versioned development standards — see [Development](#development).
 
 ## Download
 
@@ -38,6 +45,38 @@ Grab the latest build from the **[Releases](https://github.com/CalvinTTooS/promp
   a software project (`CLAUDE.md`, `GEMINI.md`, `METHOD.md`, platform profiles),
   with per-file "additional instructions" you can view, edit and reset.
 - In-app **toast** notifications.
+
+## How it works
+
+1. **Paste a raw prompt** — even a messy one-liner.
+2. **PII is anonymized locally** (on by default): emails, phone numbers, credit
+   cards (Luhn-validated) and CCVs are detected and replaced with placeholders
+   like `[EMAIL_1]` *before* anything is sent. Gemini only ever sees the masked
+   text; the real values are restored in the final output. You can also mask any
+   selected text by hand.
+3. **Gemini rewrites it** into the target format(s) you tick — each tuned to how
+   that target actually reads prompts:
+   - **Claude Chat** — conversational, XML-tagged, for chat UIs.
+   - **Claude Cowork** — a workspace agent, with explicit boundaries and
+     human-approval points.
+   - **Claude Code** — CLI-agent instructions (`CLAUDE.md` genre): plan first,
+     then act, with verifiable steps.
+   - **System + User** — splits the prompt into a **system** part (stable: role,
+     constraints, output format) and a **user** part (the specific task/data),
+     using one rule: *"would this line stay identical if you ran the task
+     tomorrow with different data?"* → yes → System, no → User.
+   - **Gemini instruction file** (`GEMINI.md`) — a Gemini CLI context file:
+     hierarchy-aware, filename-neutral, interoperable with `AGENTS.md`.
+4. **Shared few-shot examples** you provide are injected into every selected
+   format at once.
+5. **Refine / Evaluate** any variant with Claude or OpenAI (see *Provider
+   layer*), keeping keys local.
+6. **Structured scaffold** (separate mode): from a project description, Gemini
+   fills only the "Project" section of a template and the app assembles a full
+   agent-instruction set — `CLAUDE.md` + `GEMINI.md` + `METHOD.md` + platform
+   profiles — to download as a folder or zip.
+
+Everything runs client-side in the Tauri shell; nothing passes through a server of ours.
 
 ## Requirements
 
@@ -69,9 +108,17 @@ the providers' endpoints — **no proprietary backend** in between.
 
 ## Development
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the test gate and conventions.
-Methodology and project directives: [`CLAUDE.md`](CLAUDE.md) and
-[`docs/METHOD.md`](docs/METHOD.md).
+This software was **developed with AI assistance**, following a set of fairly
+strict, versioned development standards — plan-before-code, a test gate on every
+change, security-by-design, and code hygiene. Those standards aren't implicit:
+they're written down and live in the repo.
+
+- [`CLAUDE.md`](CLAUDE.md) — project-specific directives, loaded every session.
+- [`docs/METHOD.md`](docs/METHOD.md) — the full, stable engineering methodology.
+- [`AGENTS.md`](AGENTS.md) — cross-tool agent notes.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — setup, the test gate and conventions.
+- [`docs/prompt-engineering-best-practices.md`](docs/prompt-engineering-best-practices.md)
+  — the sourced research behind each prompt format.
 
 ## Contact and issues
 
