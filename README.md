@@ -5,6 +5,21 @@ ottimizzate per diversi target AI, con anonimizzazione PII e generazione di
 scaffold di istruzioni per agenti. Nessun backend proprio: tutto gira
 client-side nella webview Tauri, con le tue API key salvate solo sul dispositivo.
 
+![Windows 10/11](https://img.shields.io/badge/Windows-10%2F11-0078D6?logo=windows&logoColor=white)
+[![Release](https://img.shields.io/github/v/release/CalvinTTooS/prompt-optimizer)](https://github.com/CalvinTTooS/prompt-optimizer/releases/latest)
+![Downloads](https://img.shields.io/github/downloads/CalvinTTooS/prompt-optimizer/total)
+[![License: MIT](https://img.shields.io/github/license/CalvinTTooS/prompt-optimizer)](LICENSE)
+
+## Scarica
+
+Scarica l'ultima versione dalla pagina **[Releases](https://github.com/CalvinTTooS/prompt-optimizer/releases/latest)**:
+
+- **Installer (consigliato)**: `Prompt_optimizer_x.y.z_x64-setup.exe` — installazione nel profilo utente, **senza diritti di amministratore**.
+- **Portable**: `pop_app.exe` — eseguibile singolo da copiare e lanciare (richiede **WebView2**, di norma già presente su Windows 10/11).
+
+> ⚠️ L'app non è firmata: al primo avvio Windows **SmartScreen** può avvisare → *"Ulteriori informazioni" → "Esegui comunque"*.
+> Guida completa: [manuale utente](docs/manuale-utente.md) · [user manual (EN)](docs/user-manual.md).
+
 ## Cosa fa
 
 - **Ottimizza un prompt** in fino a 5 varianti: Claude Chat, Claude Cowork,
@@ -55,6 +70,10 @@ nel mezzo.
 Vedi [CONTRIBUTING.md](CONTRIBUTING.md) per setup, gate di test e convenzioni.
 Metodologia e direttive di progetto: [`CLAUDE.md`](CLAUDE.md) e
 [`docs/METHOD.md`](docs/METHOD.md).
+
+## Contatti e segnalazioni
+
+Domande, bug o proposte? Apri una **[issue su GitHub](https://github.com/CalvinTTooS/prompt-optimizer/issues)** — è il modo migliore per contattarmi: resta pubblico, tracciabile e non serve scambiarsi email.
 
 ## Licenza
 
