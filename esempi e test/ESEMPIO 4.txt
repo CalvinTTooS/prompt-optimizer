@@ -1,0 +1,39 @@
+ESEMPIO 4
+
+prompt generico
+ciao, perche non si puo superare la velocita della luce?
+
+prompt ottimizzato dall'applicazione
+## Contesto del progetto\nNel repository corrente, si trova una struttura per la documentazione scientifica. Esiste una directory `docs/` e un file indice principale `docs/index.md` (o un file simile che funge da punto di ingresso alla documentazione). L'obiettivo è aggiungere una nuova sezione esplicativa riguardo i limiti della velocità della luce all'interno di questa documentazione.\n\n## Task\nCrea un nuovo file Markdown contenente una spiegazione dettagliata e accessibile del motivo per cui non è possibile superare la velocità della luce. Successivamente, integra un link a questo nuovo file nell'indice principale della documentazione (`docs/index.md`).\n\n## Istruzioni\n1.  **Safety & Branching:** Inizia SEMPRE creando un nuovo branch Git dedicato a questo task. Nomina il branch in modo descrittivo, ad esempio `feat/doc-speed-of-light-limit`. NON lavorare MAI direttamente sul branch `main` o `master`. Usa `git checkout -b <nome_branch>`.\n2.  **Directory e File Creation:**\n    *   Verifica l'esistenza della directory `docs/relativity/`. Se non esiste, creala. Usa un comando come `mkdir -p docs/relativity/`.\n    *   Crea un nuovo file chiamato `docs/relativity/speed_of_light_limit.md`.\n3.  **Content Generation:**\n    *   Utilizza il tool nativo `write_file` per popolare `docs/relativity/speed_of_light_limit.md` con una spiegazione chiara e completa (circa 300-500 parole) sul perché non si può superare la velocità della luce.\n    *   La spiegazione deve essere rivolta a un pubblico generico ma interessato alla scienza e deve coprire concetti chiave come la relatività speciale, la dilatazione del tempo, la contrazione delle lunghezze e l'aumento della massa relativistica con l'avvicinarsi alla velocità della luce.\n4.  **Index Update:**\n    *   Utilizza il tool nativo `str_replace` per aggiungere un link al nuovo file (`docs/relativity/speed_of_light_limit.md`) nel file `docs/index.md`.\n    *   Cerca un punto appropriato dove inserire il link, ad esempio sotto una sezione esistente come 'Concetti Fondamentali di Fisica' o creandone una nuova se necessario. Il formato del link dovrebbe essere `*   [Il Limite della Velocità della Luce](relativity/speed_of_light_limit.md)`.\n5.  **Verify Work:**\n    *   Verifica l'esistenza del file `docs/relativity/speed_of_light_limit.md` tramite un comando di listato (es. `ls docs/relativity/speed_of_light_limit.md`).\n    *   Verifica che il contenuto del file non sia vuoto e abbia una dimensione ragionevole (es. `wc -l docs/relativity/speed_of_light_limit.md`).\n    *   Verifica che il link sia stato aggiunto correttamente in `docs/index.md` cercando la stringa del link (es. `grep "speed_of_light_limit.md" docs/index.md`).\n6.  **Logging:** Documenta ogni passo significativo del tuo lavoro, inclusi comandi eseguiti e risultati, nel file `WORK_LOG.md`. NON modificare MAI il file `CLAUDE.md`.\n7.  **Plan Mode:** Dopo aver letto e compreso tutte le istruzioni, presenta un piano dettagliato e numerato delle azioni che intendi intraprendere per completare il task. NON iniziare l'esecuzione di alcun comando finché il piano non è stato approvato.\n\n## Native Tools\nUtilizza ESCLUSIVAMENTE i tuoi strumenti nativi, come `write_file` per creare e scrivere nel file, e `str_replace` per modificare `docs/index.md`. Ti è VIETATO utilizzare script bash complessi o one-liner Python (`python -c`) per generare o modificare file con contenuto dinamico. Per la creazione di directory puoi usare `mkdir -p`.\n\n## Virtualenv Awareness\nQuesto task primariamente coinvolge la gestione di file Markdown e directory. Se, in un futuro passo di verifica o un task correlato, fosse necessario eseguire script Python, ricorda che ogni tuo comando bash opera in una subshell separata. Pertanto, dovrai sempre specificare i path assoluti per gli eseguibili dell'ambiente virtuale (es. `venv/bin/python`, `venv/bin/pip`) oppure utilizzare strumenti che gestiscono implicitamente l'ambiente come `uv`.
+
+Commenti al prompt sopra
+Questa è la versione più solida finora. Il miglioramento è netto e sistematico. Ecco l'analisi:
+
+✅ Tutto risolto dalla versione precedente
+
+Link markdown — finalmente tutti in backtick, zero auto-link spuri
+Regola write_file / str_replace — formulazione precisa, strumenti nominati esplicitamente
+Virtualenv — sezione dedicata, contestualizzata, spiega il perché (subshell separata)
+Verifiche — grep su index.md è un controllo reale e non-tautologico, ottimo
+
+
+⚠️ Un problema strutturale rimasto
+Il Plan Mode è sepolto come step 7 di una lista numerata di azioni.
+Questo è pericoloso: Claude legge la lista come una sequenza di passi da eseguire. Al passo 7 trova "NON iniziare l'esecuzione finché il piano non è approvato" — ma i passi 1–6 sono già stati letti come istruzioni operative. Un agente potrebbe ragionevolmente concludere che la sequenza sia: esegui 1-6, poi al passo 7 presenta il piano. Oppure potrebbe ignorare il conflitto e procedere.
+Soluzione: Il Plan Mode deve essere una sezione autonoma, prima delle Istruzioni, come già facevi nella v2 (quella era corretta su questo punto):
+## Piano di Esecuzione
+Dopo aver letto tutte le istruzioni, presenta un piano 
+numerato. NON eseguire alcun comando prima dell'approvazione.
+
+## Istruzioni
+1. Safety & Branching
+2. Directory e File Creation
+...
+
+⚠️ Un problema minore
+"o un file simile" nel contesto crea un'ambiguità non gestita:
+
+docs/index.md (o un file simile che funge da punto di ingresso)
+
+Se il file non si chiama esattamente docs/index.md, il str_replace al passo 4 fallirà senza recovery. Aggiungi una fallback instruction tipo: "Se docs/index.md non esiste, cerca il file indice nella directory docs/ prima di procedere."
+

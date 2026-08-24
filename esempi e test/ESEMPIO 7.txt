@@ -1,0 +1,53 @@
+ESEMPIO 7
+Prompt generico
+vorrei che mi creassi un corso di finanza personale e investimento di base
+
+
+prompt generato x claude code dall'applicazione
+## Contesto del progetto
+Il progetto mira a sviluppare un generatore automatico di contenuti didattici sulla finanza personale. L'architettura prevede uno script Python che popola una directory di documentazione strutturata. Il codice sorgente risiederà in `src/` e i contenuti del corso in `course/`. Leggere `CLAUDE.md` per le convenzioni di naming prima di iniziare.
+
+## Generazione del Piano Operativo
+Presenta un piano numerato per:
+1. Configurazione dell'ambiente di sviluppo e della struttura directory.
+2. Sviluppo di una CLI in Python in `src/course_gen.py` per generare moduli in Markdown (Mindset, Budgeting, Fondi Comuni, ETF, Tassazione).
+3. Implementazione di un sistema di validazione dei contenuti per garantire l'assenza di placeholder.
+4. Script di verifica della coerenza dei link interni tra i file generati.
+FERMARSI ATTENDENDO APPROVAZIONE prima di procedere.
+
+## Istruzioni Operative
+- Esegui `git checkout -b feature/finance-course-automation`.
+- Utilizza `uv venv` per la gestione dell'ambiente virtuale. Esegui i comandi Python tramite `.venv/bin/python`.
+- Distingui i pacchetti della Standard Library (os, path) da quelli esterni (pydantic o rich se necessari).
+- Usa il tool `write_file` per implementare la logica in `src/course_gen.py`. Non inserire manualmente i testi dei moduli nel prompt; lo script deve essere in grado di generare autonomamente il contenuto formativo (tono professionale, nessun placeholder).
+- Al termine della generazione, esegui `ls -R course/` e un check di integrità con `pytest` se sono stati definiti test.
+- Aggiorna il file `WORK_LOG.md` descrivendo le modifiche apportate e la struttura dei moduli generati.
+- Leggi `CLAUDE.md` all'inizio di ogni sessione per garantire l'allineamento con lo stato del progetto.
+
+commenti
+Questa è la versione più matura della serie. Analisi:
+
+✅ Punti forti — standard più alto finora
+Zero link markdown spuri — primo prompt della serie completamente pulito su questo punto. Evidentemente hai risolto il problema alla fonte.
+CLAUDE.md gestito correttamente — citato due volte e sempre per la lettura, mai vietato. Hai recepito il feedback della v5 e invertito la logica nel modo giusto.
+Distinzione Standard Library vs pacchetti esterni — dettaglio tecnico preciso che evita requirements.txt errati. Prima volta che compare esplicitamente.
+"Nessun placeholder" come criterio di qualità del contenuto generato — ottimo vincolo operativo, misurabile.
+Plan Mode — struttura consolidata, stop esplicito prima delle istruzioni operative.
+
+⚠️ Problemi residui
+1. Lo script genera contenuto o lo contiene?
+
+"lo script deve essere in grado di generare autonomamente il contenuto formativo"
+
+Questa frase è ambigua in modo critico: significa che course_gen.py chiama un LLM per generare i testi? Oppure che contiene logica Python hard-coded per costruire i moduli? Le due architetture sono completamente diverse. Specifica l'intenzione — se è la prima opzione, serve una dipendenza (es. chiamata API), se è la seconda, Claude deve sapere che i testi sono template statici arricchiti da logica.
+2. pytest senza test definiti è un comando che fallirà
+
+"un check di integrità con pytest se sono stati definiti test"
+
+Il condizionale "se sono stati definiti" è vago — chi li definisce? Quando? Se vuoi test, istruisci Claude a crearli come parte del task. Se non li vuoi ora, rimuovi il riferimento a pytest del tutto, altrimenti la verifica finale è non-deterministica.
+3. Validazione placeholder non ha criteri operativi
+Al punto 3 del piano chiedi un "sistema di validazione dei contenuti per garantire l'assenza di placeholder" — ma nelle istruzioni operative non c'è nessuna specifica su cosa costituisce un placeholder (es. stringhe [TODO], ..., <INSERIRE>). Claude dovrà inventarsi i criteri. Aggiungi una riga tipo: "Considera placeholder qualsiasi stringa che corrisponda a pattern come [...], <...>, TODO, (da completare)."
+4. os, path — piccolo errore tecnico
+Scrivi (os, path) come esempi di Standard Library, ma path non è un modulo — è pathlib o os.path. Dettaglio minore ma in istruzioni tecniche conta.
+
+Struttura solida — i problemi rimasti sono tutti di precisione, non di impostazione. È la versione più vicina a un prompt production-ready.

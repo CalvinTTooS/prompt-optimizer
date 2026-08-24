@@ -1,0 +1,95 @@
+ESEMPIO 1
+Prompt generico
+vorrei che mi creassi un corso di finanza personale e investimento di base
+
+
+prompt generato x claude code dall'applicazione
+Plan: Creare un corso di finanza personale e investimento di base, strutturandolo in file Markdown e organizzandoli in directory specifiche.
+
+Obiettivo: Generare una struttura di directory e file `.md` che contengano i moduli e le lezioni di un corso introduttivo alla finanza personale e all'investimento. Il corso deve essere comprensibile e accessibile per un pubblico senza conoscenze pregresse approfondite in materia finanziaria.
+
+1.  **Inizia in Plan Mode:** Prima di procedere, esplora la directory corrente e leggi attentamente il file `CLAUDE.md` per comprendere il contesto del progetto e le eventuali direttive preesistenti. Se hai dubbi sulla struttura o sui requisiti del contenuto, poni domande chiarificatrici prima di intraprendere qualsiasi azione.
+2.  **Sicurezza e Branching:**
+    IMPORTANT: Ogni modifica deve avvenire su un branch Git separato. NON lavorare MAI sul branch `main` o `master`. Crea un nuovo branch per questo compito, ad esempio `feature/corso-finanza-base`.
+    Esempio di comando: `git checkout -b feature/corso-finanza-base`
+3.  **Struttura del Corso:**
+    *   Crea una directory principale chiamata `corso_finanza_personale/`.
+    *   All'interno di questa, crea un file `README.md` che fungerà da indice generale del corso, presentando una breve introduzione e l'elenco dei moduli.
+    *   Crea una sottodirectory `moduli/`.
+    *   Per ogni modulo identificato come parte integrante di un corso di base (es. 'Introduzione alla Finanza', 'Gestione del Budget', 'Risparmio e Debito', 'Introduzione agli Investimenti', 'Pianificazione per il Futuro'), crea una sottodirectory numerata all'interno di `moduli/` (es. `moduli/01_introduzione/`, `moduli/02_gestione_budget/`).
+    *   All'interno di ogni sottodirectory del modulo, crea un file `index.md` con il contenuto dettagliato del modulo, includendo un'introduzione, gli obiettivi di apprendimento e le sezioni principali.
+4.  **Contenuto Iniziale:**
+    *   Popola il file `corso_finanza_personale/README.md` con un'introduzione al corso e un elenco dei moduli previsti.
+    *   Per il primo modulo (es. `moduli/01_introduzione/index.md`), scrivi un contenuto di esempio che introduca i concetti base della finanza personale, come l'importanza dell'educazione finanziaria e i termini chiave.
+5.  **Verifica del Lavoro:**
+    Dopo aver creato i file e le directory, esegui una verifica interna per assicurare la correttezza:
+    *   Controlla che la struttura delle directory sia stata creata correttamente.
+    *   Verifica che i file Markdown (`README.md`, `index.md` dei moduli) siano stati creati e contengano almeno un contenuto iniziale significativo e formattato correttamente.
+    *   Simula una lettura dei file chiave per controllarne la coerenza e la chiarezza: `cat corso_finanza_personale/README.md` e `cat corso_finanza_personale/moduli/01_introduzione/index.md`.
+6.  **Aggiornamento del Contesto:** Aggiorna il file `CLAUDE.md` con una breve nota sul lavoro svolto (creazione della struttura iniziale del corso e del primo modulo) e sul branch Git creato.
+
+Riferimenti utili: Puoi referenziare file esistenti o appena creati usando la sintassi `@nome_file.md` se hai bisogno di integrare o fare riferimento a contenuti specifici all'interno del tuo lavoro.
+
+---
+**REMINDER PER L'UTENTE UMANO:**
+- Usa `#` seguito da un messaggio per aggiungere annotazioni a `MEMORY.md` e fornire contesto extra.
+- Usa `/rewind` per annullare le ultime azioni dell'agente in caso di errori o direzioni indesiderate.
+- Usa `/compact` per ottimizzare il contesto e risparmiare token, specialmente in sessioni lunghe.
+---
+
+
+commenti al prompt sopra, da allegare alle best practices per generare il prompt di claude code
+
+Valutazione complessiva: Buono, con alcune correzioni da fare
+Non è sbagliato — anzi, la struttura di base è corretta e dimostra una buona comprensione di come funziona Claude Code. Ma ci sono alcuni problemi specifici da correggere.
+
+✅ Cosa è fatto bene
+Plan Mode esplicito — chiedere di partire in plan mode prima di agire è una best practice importante, riduce gli errori su task complessi.
+Git branching obbligatorio — il punto 2 con IMPORTANT: e il comando esplicito è esattamente il modo giusto per dirlo. Claude Code rispetta questo tipo di direttiva.
+Struttura directory dettagliata — specificare nomi di file, path e convenzioni di naming (01_introduzione/, index.md) è corretto: Claude Code lavora meglio con istruzioni concrete.
+Verifica con comandi bash — il punto 5 con i comandi cat da eseguire è ottimo: Claude Code può e deve verificare il proprio lavoro eseguendo comandi reali.
+Sintassi @nome_file — citata correttamente.
+
+❌ Problemi da correggere
+1. Il "REMINDER PER L'UTENTE UMANO" non appartiene qui
+Questo è il problema più grave. Quel blocco finale (/rewind, /compact, # per MEMORY.md) sono istruzioni per te, non per Claude. Metterle nel file che Claude legge:
+
+spreca token
+può confondere il modello (Claude potrebbe interpretarle come istruzioni per sé)
+
+Soluzione: toglile dal file completamente. Tienile su un tuo appunto separato.
+
+2. Il punto 6 — aggiornare CLAUDE.md — è rischioso
+Chiedere a Claude di modificare il file di istruzioni che sta seguendo mentre lo sta seguendo può creare comportamenti inconsistenti o autoreferenziali. Se vuole tenere un log del lavoro, è meglio un file separato (es. WORK_LOG.md).
+Soluzione:
+markdown6. **Log del lavoro:** Crea o aggiorna un file `WORK_LOG.md` 
+   con una nota sul branch Git creato e i file generati. 
+   NON modificare il file CLAUDE.md.
+
+3. Manca un contesto del repository
+Claude Code, quando avvia, legge il CLAUDE.md senza sapere nulla del progetto. Il tuo file salta direttamente al task senza dire dove si trova o cosa c'è già. Se il repo è vuoto è ok, ma se ha già dei file potrebbe creare conflitti.
+Soluzione: aggiungi 3-4 righe di contesto iniziale:
+markdown## Contesto del progetto
+Repository vuoto. Linguaggio: nessuno (solo Markdown).
+Scopo: generare materiale didattico strutturato in file .md.
+Git inizializzato: sì/no.
+
+4. Il contenuto dei moduli 2-5 non è specificato
+Il punto 4 dice "scrivi contenuto per il primo modulo" ma lascia tutti gli altri vuoti. Claude probabilmente creerà gli altri index.md con contenuto minimo o placeholder. Se vuoi contenuto reale per tutti i moduli, devi dirlo esplicitamente.
+Soluzione:
+markdown4. **Contenuto:** Popola con contenuto completo e dettagliato 
+   TUTTI i file `index.md` di ogni modulo, non solo il primo. 
+   Ogni modulo deve avere: introduzione, obiettivi di apprendimento, 
+   sezioni con spiegazioni, esempi pratici e 3-5 takeaway.
+
+Versione corretta (diff dei soli punti modificati)
+markdown## Contesto del progetto
+Repository vuoto. Scopo: generare materiale didattico in Markdown.
+Nessuna dipendenza esterna. Git inizializzato.
+
+[... punti 1-5 invariati ...]
+
+6. **Log del lavoro:** Crea il file `WORK_LOG.md` con una nota 
+   sul branch creato, i file generati e la data. 
+   NON modificare questo file (CLAUDE.md).
+E rimuovi completamente il blocco REMINDER PER L'UTENTE UMANO.

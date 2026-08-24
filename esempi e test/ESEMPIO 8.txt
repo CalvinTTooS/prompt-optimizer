@@ -1,0 +1,57 @@
+ESEMPIO 8
+
+Prompt generico
+vorrei che mi creassi un corso di finanza personale e investimento di base
+
+prompt generato
+## Contesto del progetto
+Il progetto consiste nella creazione di un generatore statico di contenuti formativi per un corso di finanza personale. La struttura deve essere salvata in `docs/course/` e i contenuti devono essere gestiti tramite file Markdown. Il progetto include uno script Python in `src/generator.py` per la validazione dei contenuti.
+
+## Generazione del Piano Operativo
+1. Analisi dei requisiti del corso (budgeting, asset allocation, compound interest).
+2. Creazione della struttura delle directory in `content/lessons/`.
+3. Sviluppo di uno script di validazione in `src/validator.py` per assicurare che ogni lezione abbia i metadati corretti.
+4. Generazione automatica dei file markdown delle lezioni.
+5. Configurazione dei test in `tests/test_content.py`.
+
+FERMARSI ATTENDENDO APPROVAZIONE prima di procedere.
+
+## Istruzioni Operative
+- Leggere il file `CLAUDE.md` prima di iniziare.
+- Eseguire `git checkout -b feature/finance-course-structure`.
+- Usare `uv run python` o `.venv/bin/python` per l'esecuzione di script.
+- Creare i contenuti del corso in modo dinamico usando il tool `write_file`. 
+- DEFINIZIONE DI PLACEHOLDER: È vietato inserire stringhe come "[TODO]", "<INSERIRE CONTENUTO>" o commenti di omissione "...". Ogni file deve essere completo di testo esplicativo reale.
+- Distinguere l'uso della Standard Library (es. `pathlib`) da pacchetti esterni (es. `pydantic`).
+- Creare file di test con `pytest` prima di verificare la validazione.
+- Aggiornare costantemente `WORK_LOG.md` con il progresso dei task.
+- È vietato modificare `CLAUDE.md`.
+
+## Specifiche Architetturali
+L'applicazione deve generare i contenuti in modo deterministico basandosi sui requisiti di finanza base (es. calcolo interesse composto). La generazione deve avvenire tramite logica interna allo script e non tramite hardcoding manuale dei file se non per i template iniziali.
+
+
+
+commenti
+Buone notizie e una regressione. Analisi:
+
+✅ Punti forti consolidati
+Definizione di placeholder esplicita — finalmente operativa: "[TODO]", "<INSERIRE CONTENUTO>", "..." sono criteri concreti e verificabili. Era il gap della v6, qui risolto bene.
+Sezione Specifiche Architetturali separata — distinguere "cosa fa il sistema" dalle "istruzioni operative" è una scelta strutturale corretta che migliora la leggibilità per Claude.
+pytest condizionato correttamente — "Creare file di test con pytest prima di verificare la validazione" dà un ordine esplicito invece del vago "se sono stati definiti test" della v6.
+Plan Mode e CLAUDE.md — consolidati, nessuna regressione.
+
+⚠️ Regressione: link markdown
+Tornano [generator.py](http://generator.py), [validator.py](http://validator.py), [content.py](http://content.py), [CLAUDE.md](http://CLAUDE.md), [LOG.md](http://LOG.md) — problema risolto nella v6 e ricomparso qui. Conferma che il problema è nello strumento usato per generare il prompt, non nelle tue intenzioni.
+
+⚠️ Incoerenza strutturale: due directory per i contenuti
+Nel Contesto scrivi docs/course/, nel Piano scrivi content/lessons/. Claude dovrà scegliere arbitrariamente quale usare. Scegli una e usa quella ovunque.
+
+⚠️ Ambiguità architetturale non risolta
+La sezione Specifiche dice:
+
+"La generazione deve avvenire tramite logica interna allo script e non tramite hardcoding manuale... se non per i template iniziali."
+
+L'eccezione "se non per i template iniziali" reintroduce l'ambiguità della v6: lo script contiene testo hard-coded o lo genera? Il confine tra "template iniziale" e "contenuto hardcoded" non è definito. Togli l'eccezione o definiscila con precisione.
+
+Un passo avanti sui contenuti, mezzo passo indietro su link e directory. La v6 rimane la più solida complessivamente — questa la supera solo sulla definizione di placeholder e sulla gestione dei test.
