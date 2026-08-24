@@ -5,6 +5,8 @@ ottimizzate per diversi target AI, con anonimizzazione PII e generazione di
 scaffold di istruzioni per agenti. Nessun backend proprio: tutto gira
 client-side nella webview Tauri, con le tue API key salvate solo sul dispositivo.
 
+![Prompt Optimizer — schermata principale](docs/manual-img/04.png)
+
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%2F11-0078D6?logo=windows&logoColor=white)
 [![Release](https://img.shields.io/github/v/release/CalvinTTooS/prompt-optimizer)](https://github.com/CalvinTTooS/prompt-optimizer/releases/latest)
 ![Downloads](https://img.shields.io/github/downloads/CalvinTTooS/prompt-optimizer/total)
