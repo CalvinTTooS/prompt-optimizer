@@ -1,107 +1,105 @@
 # Prompt Optimizer
 
-App desktop (Windows, via **Tauri**) che trasforma un prompt grezzo in varianti
-ottimizzate per diversi target AI, con anonimizzazione PII e generazione di
-scaffold di istruzioni per agenti. Nessun backend proprio: tutto gira
-client-side nella webview Tauri, con le tue API key salvate solo sul dispositivo.
+**English** · [Italiano](README.it.md)
 
-![Prompt Optimizer — schermata principale](docs/manual-img/04.png)
+Desktop app (Windows, via **Tauri**) that turns a raw prompt into variants
+optimized for different AI targets, with PII anonymization and generation of
+agent-instruction scaffolds. No backend of its own: everything runs client-side
+in the Tauri webview, with your API keys stored only on your device.
+
+![Prompt Optimizer — main screen](docs/manual-img/04.png)
 
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%2F11-0078D6?logo=windows&logoColor=white)
 [![Release](https://img.shields.io/github/v/release/CalvinTTooS/prompt-optimizer)](https://github.com/CalvinTTooS/prompt-optimizer/releases/latest)
 ![Downloads](https://img.shields.io/github/downloads/CalvinTTooS/prompt-optimizer/total)
 [![License: MIT](https://img.shields.io/github/license/CalvinTTooS/prompt-optimizer)](LICENSE)
 
-## Scarica
+## Download
 
-Scarica l'ultima versione dalla pagina **[Releases](https://github.com/CalvinTTooS/prompt-optimizer/releases/latest)**:
+Grab the latest build from the **[Releases](https://github.com/CalvinTTooS/prompt-optimizer/releases/latest)** page:
 
-- **Installer (consigliato)**: `Prompt_optimizer_x.y.z_x64-setup.exe` — installazione nel profilo utente, **senza diritti di amministratore**.
-- **Portable**: `pop_app.exe` — eseguibile singolo da copiare e lanciare (richiede **WebView2**, di norma già presente su Windows 10/11).
+- **Installer (recommended)**: `Prompt_optimizer_x.y.z_x64-setup.exe` — installs into your user profile, **no admin rights required**.
+- **Portable**: `pop_app.exe` — a single executable to copy and run (requires **WebView2**, usually already present on Windows 10/11).
 
-> ⚠️ L'app non è firmata: al primo avvio Windows **SmartScreen** può avvisare → *"Ulteriori informazioni" → "Esegui comunque"*.
-> Guida completa: [manuale utente](docs/manuale-utente.md) · [user manual (EN)](docs/user-manual.md).
+> ⚠️ The app is unsigned: on first launch Windows **SmartScreen** may warn you → *"More info" → "Run anyway"*.
+> Full guide: [user manual (EN)](docs/user-manual.md) · [manuale utente (IT)](docs/manuale-utente.md).
 
-## Cosa fa
+## What it does
 
-- **Ottimizza un prompt** in fino a 5 varianti: Claude Chat, Claude Cowork,
-  Claude Code (CLI), coppia System+User (API), file istruzioni Gemini
-  (`GEMINI.md`). Motore: Google **Gemini** con la tua API key.
-- **Anonimizzazione PII** (email, telefono, carte/CCV con validazione Luhn)
-  prima dell'invio al modello, con ripristino automatico nell'output.
-- **Rifinisci / Valuta** ogni variante con **Claude** (API) o **OpenAI** (API)
-  — vedi "Provider layer". Switch per motore in ⚙️ Impostazioni.
-- **Esempi few-shot** condivisi, iniettati in tutti i formati selezionati.
-- **Scaffold strutturato**: genera il set completo di file di istruzioni per un
-  progetto software (`CLAUDE.md`, `GEMINI.md`, `METHOD.md`, profili di
-  piattaforma), con "istruzioni aggiuntive" visualizzabili/modificabili/
-  ripristinabili per-file.
-- Notifiche **toast** in-app.
+- **Optimizes a prompt** into up to 5 variants: Claude Chat, Claude Cowork,
+  Claude Code (CLI), a System+User pair (API), and a Gemini instruction file
+  (`GEMINI.md`). Engine: Google **Gemini** with your own API key.
+- **PII anonymization** (email, phone, cards/CCV with Luhn validation) before
+  anything reaches the model, with automatic restore in the output.
+- **Refine / Evaluate** each variant with **Claude** (API) or **OpenAI** (API)
+  — see "Provider layer". Per-engine switch in ⚙️ Settings.
+- **Shared few-shot examples**, injected into every selected format.
+- **Structured scaffold**: generates the full set of agent-instruction files for
+  a software project (`CLAUDE.md`, `GEMINI.md`, `METHOD.md`, platform profiles),
+  with per-file "additional instructions" you can view, edit and reset.
+- In-app **toast** notifications.
 
-## Requisiti
+## Requirements
 
 - **Node.js** + npm.
-- Toolchain **Rust/Cargo** (per la build desktop Tauri).
+- **Rust/Cargo** toolchain (for the Tauri desktop build).
 
-## Avvio e build
+## Run and build
 
 ```bash
 npm install
-npm run tauri dev      # shell desktop completa
-npm run tauri build    # eseguibile + installer
+npm run tauri dev      # full desktop shell
+npm run tauri build    # executable + installer
 ```
 
-> `npm run dev` da solo avvia **solo** la webview Next.js nel browser, senza le
-> API Tauri (store, download nativi). Per usare l'app serve la shell Tauri.
+> `npm run dev` alone starts **only** the Next.js webview in the browser, without
+> the Tauri APIs (store, native downloads). You need the Tauri shell to use the app.
 
-Questo repo produce una **build unica solo-API**: nessuna feature flag, nessuna
-dipendenza da un CLI locale. `npm run tauri dev`/`npm run tauri build` — senza
-alcun flag — bastano sempre.
+This repo produces a **single API-only build**: no feature flags, no dependency
+on a local CLI. `npm run tauri dev`/`npm run tauri build` — with no flags — are
+always enough.
 
 ## Privacy
 
-I tuoi **prompt** vengono inviati a **Google Gemini** per l'ottimizzazione e, se
-usi Rifinisci/Valuta via API, al provider scelto (**Anthropic** e/o **OpenAI**).
-Le **API key** (Gemini, Anthropic, OpenAI) sono salvate **solo sul tuo dispositivo**
-(`tauri-plugin-store`), non vengono mai loggate, e le chiamate escono
-direttamente verso gli endpoint dei provider — **nessun backend proprietario**
-nel mezzo.
+Your **prompts** are sent to **Google Gemini** for optimization and, if you use
+Refine/Evaluate via API, to the provider you choose (**Anthropic** and/or
+**OpenAI**). Your **API keys** (Gemini, Anthropic, OpenAI) are stored **only on
+your device** (`tauri-plugin-store`), are never logged, and calls go directly to
+the providers' endpoints — **no proprietary backend** in between.
 
-## Sviluppo
+## Development
 
-Vedi [CONTRIBUTING.md](CONTRIBUTING.md) per setup, gate di test e convenzioni.
-Metodologia e direttive di progetto: [`CLAUDE.md`](CLAUDE.md) e
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the test gate and conventions.
+Methodology and project directives: [`CLAUDE.md`](CLAUDE.md) and
 [`docs/METHOD.md`](docs/METHOD.md).
 
-## Contatti e segnalazioni
+## Contact and issues
 
-Domande, bug o proposte? Apri una **[issue su GitHub](https://github.com/CalvinTTooS/prompt-optimizer/issues)** — è il modo migliore per contattarmi: resta pubblico, tracciabile e non serve scambiarsi email.
+Questions, bugs or ideas? Open a **[GitHub issue](https://github.com/CalvinTTooS/prompt-optimizer/issues)** — it's the best way to reach me: public, trackable, and no email exchange needed.
 
-## Licenza
+## License
 
 [MIT](LICENSE).
 
 ---
 
-## Provider layer (Rifinisci / Valuta)
+## Provider layer (Refine / Evaluate)
 
-Le azioni "Rifinisci"/"Valuta con Claude" nel `ResultViewer` non parlano a un
-unico backend: girano su un **layer di provider** intercambiabile
-(`app/lib/providers/`, orchestrato da `availableProviders()` in
-`app/lib/providers/registry.ts` e consumato da `app/hooks/useClaudeRefine.ts`).
-Ogni provider implementa la stessa interfaccia `LlmProvider` (`run(assembled,
-tier) → { text, usage }`, in `app/lib/providers/types.ts`) e compare come
-pulsante separato in UI quando disponibile:
+The "Refine"/"Evaluate with Claude" actions in `ResultViewer` don't talk to a
+single backend: they run on a swappable **provider layer** (`app/lib/providers/`,
+orchestrated by `availableProviders()` in `app/lib/providers/registry.ts` and
+consumed by `app/hooks/useClaudeRefine.ts`). Each provider implements the same
+`LlmProvider` interface (`run(assembled, tier) → { text, usage }`, in
+`app/lib/providers/types.ts`) and shows up as its own button in the UI when available:
 
 - **Claude API** (`claude-api`, label "Claude (API)") — `app/lib/providers/claudeApi.ts`.
-  Attivo quando è presente una API key Anthropic in ⚙️ Impostazioni.
+  Active when an Anthropic API key is present in ⚙️ Settings.
 - **OpenAI API** (`openai-api`, label "OpenAI (API)") — `app/lib/providers/openaiApi.ts`.
-  Attivo quando è presente una API key OpenAI in ⚙️ Impostazioni.
+  Active when an OpenAI API key is present in ⚙️ Settings.
 
-Le API key dei due provider si inseriscono nel pannello ⚙️
-Impostazioni e restano **solo locali** (stesso store `tauri-plugin-store` usato
-per la chiave Gemini); le chiamate escono direttamente dalla webview via
-`tauri-plugin-http` verso gli endpoint Anthropic/OpenAI — nessun backend
-proprio nel mezzo. Il monitor di consumo in UI accumula i token restituiti da
-ogni provider (solo token, non prezzo). Ogni motore può essere attivato/
-disattivato dagli switch in ⚙️ Impostazioni (master + per-motore).
+The two providers' API keys are entered in the ⚙️ Settings panel and stay
+**local only** (same `tauri-plugin-store` used for the Gemini key); calls go
+straight from the webview via `tauri-plugin-http` to the Anthropic/OpenAI
+endpoints — no backend of its own in between. The in-UI usage monitor
+accumulates the tokens returned by each provider (tokens only, not price). Each
+engine can be toggled on/off from the switches in ⚙️ Settings (master + per-engine).
