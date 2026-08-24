@@ -1,0 +1,46 @@
+ESEMPIO 3
+Vorrei che mi creassi un'applicazione che analizzi la posizione dei pianeti andando piu indietro possibile nel tempo e le correli con eventi storici attuali e del passato. Con questa applicazione vorrei trovare le correlazioni tra allineamenti planetari ed eventi storici importanti e verificare la ricorrenza. Esempio banale caso: eclissi di sole e scoppio di rivolte.
+
+
+prompt generato per claude code dall'applicazione
+## Contesto del progetto\nIl repository corrente è appena stato inizializzato. Contiene solo un file `README.md` con informazioni base sul progetto. Non è stato ancora configurato alcun ambiente di sviluppo né è stato scritto codice applicativo. L'obiettivo è avviare lo sviluppo di un'applicazione Python per l'analisi delle correlazioni astro-storiche.\n\n## Obiettivo\nL'obiettivo è creare una prima bozza dell'infrastruttura dell'applicazione, che includa la configurazione dell'ambiente, le dipendenze essenziali e uno script Python di base per calcolare le posizioni planetarie.\n\n## Plan Mode\nPer prima cosa, genera un piano dettagliato per raggiungere l'obiettivo. Il piano deve includere i seguenti passaggi:\n1.  **Creazione Branch**: Crea un nuovo branch Git per lo sviluppo di questa funzionalità.\n2.  **Struttura Directory**: Definisci una struttura di directory Python standard per il progetto (es. `src/`, `data/`, `tests/`).\n3.  **Ambiente Virtuale**: Inizializza un ambiente virtuale Python e attivalo.\n4.  **Dipendenze**: Identifica e installa le librerie Python necessarie per il calcolo delle posizioni planetarie (es. `skyfield`) e per la gestione dei dati (es. `pandas`). Genera un file `requirements.txt`.\n5.  **Script Base Astronomico**: Crea un file `src/main.py` che contenga una funzione di esempio in Python. Questa funzione dovrà:\n    *   Accettare una data specifica (es. anno, mese, giorno).\n    *   Utilizzare `skyfield` per calcolare la posizione di un pianeta (es. Marte) per quella data rispetto al Sole o alla Terra.\n    *   Stampare le coordinate risultanti.\n    *   Includere un blocco `if __name__ == "__main__":` per testare la funzione con una data predefinita.\n6.  **Aggiornamento README**: Aggiorna il `README.md` esistente con una breve descrizione del progetto e le istruzioni per l'installazione e l'esecuzione.\n7.  **Verifiche**: Definisci una serie di comandi per verificare che i passaggi precedenti siano stati eseguiti correttamente.\n\nEsegui questo piano passo dopo passo.\n\n## Regole TASSATIVE per l'esecuzione:\n*   **Safety & Branching**: Prima di qualsiasi modifica, crea e passa a un nuovo branch con un nome significativo (es. `git checkout -b feature/astro-correlations-v1`). Non lavorare MAI sul branch `main`.\n*   **Dynamic Generation (NO BASH CAT FOR CONTENT)**: NON inserire il contenuto dei file (es. codice Python per `main.py`, testo per `README.md`, elenco dipendenze per `requirements.txt`) direttamente nei comandi `cat << EOF`. Devi istruire Claude a GENERARE questo contenuto usando la sua intelligenza. Ad esempio: `python -c "print('codice generato')" > src/main.py`.\n*   **Verify Work**: Dopo ogni passaggio significativo (es. creazione file, installazione dipendenze), esegui comandi di verifica non tautologici. Esempi:\n    *   Per verificare l'esistenza di un file: `ls -l src/main.py`\n    *   Per contare le linee o parole: `wc -l src/main.py` o `wc -w README.md`\n    *   Per verificare la sintassi Python: `python -m py_compile src/main.py` (se l'ambiente è attivo) o un linter.\n    *   Per verificare l'installazione di una dipendenza: `pip show skyfield`\n*   **Logging**: Aggiorna il file `WORK_LOG.md` con una descrizione dettagliata di ogni azione intrapresa e il risultato di ogni verifica. Usa `cat <<EOF` per aggiungere al log, assicurandoti che `EOF` sia senza virgolette per permettere l'espansione delle variabili se necessario.\n    *   **VIETATO** modificare il file `CLAUDE.md`.\n*   **No Human Reminders**: Tutte le istruzioni sono rivolte ESCLUSIVAMENTE all'agente. NON includere messaggi o promemoria per un utente umano.
+
+
+
+commenti al prompt sopra, da allegare alle best practices per generare il prompt di claude code
+
+Punti forti
+
+Contesto chiaro — repo allo stato zero, obiettivo definito, nessuna ambiguità su punto di partenza
+Verifiche non-tautologiche — ottima scelta, py_compile, pip show, wc -l sono controlli reali
+Safety/branching esplicito — giusto renderlo una regola tassativa
+"No Human Reminders" — essenziale per un agente autonomo, spesso dimenticato
+WORK_LOG — utile per audit trail, specialmente in sessioni lunghe
+
+
+⚠️ Problemi da correggere
+1. La regola "Dynamic Generation (NO BASH CAT)" è controproducente
+È il punto più critico. Vietare cat << EOF e sostituirlo con python -c "print(...)" è in realtà peggio, perché:
+
+Claude Code ha tool nativi (write_file / str_replace) — li usa già in modo intelligente, non hardcoda nulla in bash
+Forzare python -c per file multi-linea genera bash illeggibile e fragile
+La regola nasce da un'incomprensione: in Claude Code il "contenuto generato intelligentemente" arriva dai tool di editing, non dalla shell
+
+Soluzione: Rimuovi questa regola. Al massimo puoi scrivere: "Usa i tool nativi di scrittura file, non heredoc bash."
+
+2. I link markdown sono mal formati
+Nel testo compaiono [README.md](http://README.md), [main.py](http://main.py), [CLAUDE.md](http://CLAUDE.md) — sembrano generati da Notion o simili che auto-linka i nomi file. Claude Code li interpreterà correttamente, ma è rumore e potenzialmente confuso. Usa direttamente i path grezzi: `README.md`, `src/main.py`.
+
+3. L'attivazione del virtualenv non persiste tra i tool call
+Claude Code esegue ogni comando bash in una subshell separata, quindi source venv/bin/activate non ha effetto sui comandi successivi. Le istruzioni non lo contemplano.
+Soluzione: Specificare esplicitamente di usare venv/bin/pip e venv/bin/python nei comandi successivi, oppure consigliare uv che gestisce l'ambiente implicitamente.
+
+4. "Plan Mode → Esegui passo dopo passo" è ambiguo
+In Claude Code il Plan Mode significa: Claude presenta il piano, l'utente approva, poi si esegue. Il tuo prompt dice di generare il piano E poi eseguirlo nello stesso turno — questo bypassa l'approvazione umana, che potrebbe essere intenzionale o no. Chiarisci se vuoi:
+
+Solo il piano (da approvare prima di eseguire)
+Piano + esecuzione immediata in autonomia
+
+
+📝 Struttura complessiva
+Il framework è solido — contesto / obiettivo / piano / regole è esattamente la struttura giusta per istruzioni a Claude Code. Con le correzioni sopra diventa molto efficace.

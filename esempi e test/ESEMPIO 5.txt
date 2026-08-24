@@ -1,0 +1,73 @@
+ESEMPIO 5
+
+prompt generico
+Vorrei che mi costruissi un programma per la finanza persoanle. Considera che non sono ne un programmatore ne un esperto di finanza personale. Per questo dovrai suggerirmi tu da dove partire e come costruirlo.
+
+Prompt ottimizzato dall'applicazione
+## Contesto del progetto
+Il repository è attualmente un nuovo `git init` o è vuoto. Non ci sono file sorgente o di configurazione per il progetto di finanza personale. L'obiettivo è avviare la struttura di base per un'applicazione di finanza personale, considerando che l'utente che userà il codice non è un programmatore o un esperto di finanza. Il programma dovrà essere semplice e fornire una base per registrare e visualizzare transazioni.
+
+## Plan Mode
+Il mio piano iniziale per la configurazione del progetto è il seguente:
+1.  Verificare l'inizializzazione del repository Git e, se necessario, inizializzarlo.
+2.  Creare un nuovo branch Git per lo sviluppo.
+3.  Impostare un ambiente virtuale Python (`venv`) per isolare le dipendenze.
+4.  Creare un file `README.md` che spieghi in modo semplice lo scopo del programma per utenti non tecnici.
+5.  Creare un file `main.py` con una struttura di base per la gestione delle transazioni (es. aggiunta e visualizzazione).
+6.  Creare un file `requirements.txt` per elencare le dipendenze Python (se necessario, inizialmente vuoto).
+7.  Inizializzare il `WORK_LOG.md` con il riepilogo delle operazioni eseguite.
+
+Attendi approvazione per procedere con le istruzioni operative.
+
+## Istruzioni
+1.  Controlla se il repository Git è già stato inizializzato. Se `ls -F .git/` non restituisce il contenuto della directory `.git/`, allora esegui `git init`.
+2.  Crea un nuovo branch per il lavoro:
+    `git checkout -b feature/personal-finance-setup`
+3.  Crea un ambiente virtuale Python:
+    `python3 -m venv venv`
+4.  Crea il file `README.md` con il seguente contenuto:
+    `write_file README.md "# Programma di Finanza Personale Semplice\n\nQuesto è un programma basilare per aiutarti a tenere traccia delle tue entrate e uscite.\nÈ pensato per essere facile da usare, anche se non sei un esperto di computer.\n\n## Funzionalità Iniziali\n- Registrare nuove transazioni (entrate o uscite).\n- Visualizzare un elenco delle transazioni.\n- Calcolare un saldo semplice.\n\n## Come Usarlo\nPresto aggiungeremo le istruzioni dettagliate su come avviare il programma e inserire i tuoi dati.\n\nSpero ti sia utile per la tua gestione finanziaria!"`
+5.  Crea il file `main.py` con la seguente struttura iniziale:
+    `write_file main.py "def aggiungi_transazione(tipo, descrizione, importo):\n    # Logica per aggiungere una transazione (es. a una lista o a un file)\n    print(f\"Aggiunta: {tipo.capitalize()} - {descrizione}: {importo}€\")\n\ndef visualizza_transazioni():\n    # Logica per visualizzare tutte le transazioni\n    print(\"Elenco transazioni: (ancora vuoto, da implementare)\")\n\ndef calcola_saldo():\n    # Logica per calcolare il saldo totale\n    print(\"Saldo attuale: (da implementare)\")\n\nif __name__ == \"__main__\":\n    print(\"Benvenuto nel tuo programma di finanza personale!\")\n    # Esempio di utilizzo (da espandere)\n    # aggiungi_transazione(\"entrata\", \"Stipendio\", 2000)\n    # aggiungi_transazione(\"uscita\", \"Affitto\", 800)\n    visualizza_transazioni()\n    calcola_saldo()"`
+6.  Crea il file `requirements.txt` (vuoto per ora):
+    `write_file requirements.txt ""`
+7.  Verifica la creazione dei file:
+    `ls -F`
+    `cat README.md`
+    `cat main.py`
+8.  Verifica la sintassi di `main.py` usando l'interprete Python dell'ambiente virtuale:
+    `venv/bin/python -m py_compile main.py`
+9.  Crea il file `WORK_LOG.md` con il seguente contenuto, che registrerà le operazioni:
+    `write_file WORK_LOG.md "# Log del Lavoro\n\n## Setup Iniziale del Progetto\n- Creato branch `feature/personal-finance-setup`.\n- Inizializzato ambiente virtuale Python.\n- Creati file `README.md`, `main.py`, `requirements.txt`.\n- Verificata la sintassi di `main.py`."```
+
+
+
+Commenti
+Questa versione ha un problema fondamentale nuovo che non era presente nelle precedenti. Ecco l'analisi:
+
+🚨 Problema critico: il contenuto dei file è hardcoded nelle istruzioni
+Nei passi 4, 5 e 9 stai scrivendo letteralmente il contenuto dei file nelle istruzioni, passandolo come parametro a write_file:
+write_file README.md "# Programma di Finanza Personale\n\nQuesto è..."
+Questo è esattamente l'antipattern che avevi correttamente risolto nella v3. Stai tornando indietro, ma in una forma diversa: invece di cat <<EOF, ora hardcodi il contenuto nel prompt stesso. Il risultato è identico: Claude non genera nulla, trascrive soltanto.
+Se vuoi che Claude usi la sua intelligenza per scrivere i file, le istruzioni devono descrivere cosa deve contenere il file, non come deve essere scritto parola per parola. Esempio corretto:
+
+"Crea README.md con una spiegazione semplice dello scopo del programma, le funzionalità iniziali e le istruzioni d'uso. Tono accessibile per utenti non tecnici."
+
+
+🚨 Problema critico: Plan Mode non funziona
+Scrivi "Attendi approvazione per procedere con le istruzioni operative" — ma le istruzioni operative seguono immediatamente nello stesso prompt. Claude le leggerà tutte insieme e non si fermerà mai, perché non c'è nessun meccanismo che lo blocchi. Il Plan Mode funziona solo se le istruzioni operative arrivano in un secondo messaggio, dopo l'approvazione.
+
+⚠️ Regressione sui link markdown
+Tornano [README.md](http://README.md), [main.py](http://main.py), [LOG.md](http://LOG.md) — problema già risolto nella v3 e qui ricomparso. Backtick ovunque.
+
+✅ Cosa funziona
+
+Branching esplicito e corretto
+venv/bin/python -m py_compile per la verifica sintattica — ottimo
+ls -F + cat come verifiche di esistenza
+Struttura delle sezioni (Contesto → Plan → Istruzioni) è giusta concettualmente
+
+
+📊 Riepilogo evolutivo
+Aspettov1v2v3v4Contenuto file non hardcoded❌✅✅❌Plan Mode corretto⚠️✅⚠️❌Link markdown❌⚠️✅❌Verifiche qualità⚠️⚠️✅✅Virtualenv❌✅✅✅
+La v4 è la più debole delle ultime tre — sono ricomparsi problemi già risolti. Ti consiglio di riprendere la struttura della v3 come base e adattarla a questo nuovo task.

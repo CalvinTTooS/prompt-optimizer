@@ -1,0 +1,53 @@
+ESEMPIO 6
+Prompt generico
+Vorrei che mi scrivessi un programma che mi aiuti a gestire la dieta personale. Inserire cosa ho mangiato per il calcolo calorico e consigli per mangiare meglio. 
+
+Prompt generato da Claude Code
+## Contesto del progetto
+Il progetto consiste nella creazione di un'applicazione CLI o web-based per la gestione della dieta personale. I file principali saranno locati in `src/` e i dati in `data/`.
+
+## Generazione del Piano Operativo
+Studia attentamente i requisiti forniti: l'app deve permettere il log dei pasti, il calcolo delle calorie e fornire consigli nutrizionali. 
+Formula un piano d'azione numerato che includa:
+1. Analisi della struttura dei file necessari.
+2. Definizione dello schema dati per i pasti.
+3. Implementazione della logica di calcolo e dei suggerimenti.
+4. Strategia di test.
+
+PRESENTA IL PIANO E FERMATI. Attendi l'approvazione dell'utente prima di eseguire qualsiasi comando o scrivere file.
+
+## Istruzioni Operative
+- Crea un nuovo branch con `git checkout -b feature/diet-manager` prima di iniziare.
+- Verifica l'esistenza della directory di progetto con `ls` e crea `src/` se mancante.
+- Progetta il codice in modo che sia modulare. Descrivi i contenuti di `src/tracker.py` (logica log), `src/nutrition.py` (calcoli e consigli) e `src/main.py` (entry point).
+- Utilizza `uv` o path assoluti per l'ambiente virtuale (es. `.venv/bin/python`) per installare eventuali dipendenze come `pandas` o `sqlite3`.
+- Non includere snippet di codice direttamente in questo prompt; genera il contenuto dei file basandoti sulla tua conoscenza di Clean Code e algoritmi nutrizionali.
+- Esegui una verifica logica del codice creato usando `python3 -m py_compile` sui file generati.
+- Aggiorna il file `WORK_LOG.md` dopo ogni operazione significativa, descrivendo le modifiche apportate.
+- E' ASSOLUTAMENTE VIETATO modificare o leggere il file `CLAUDE.md`.
+
+
+Commenti
+Questa è la versione più equilibrata finora. Analisi:
+
+✅ Punti forti — i migliori visti finora
+Plan Mode finalmente corretto: "PRESENTA IL PIANO E FERMATI" in una sezione dedicata, prima delle istruzioni operative, con stop esplicito. È esattamente la struttura giusta.
+Contenuto non hardcoded: la regola è espressa bene — "Descrivi i contenuti... genera il contenuto basandoti sulla tua conoscenza". Claude ha libertà generativa reale.
+Toolchain corretta: uv come prima scelta, path assoluti come fallback — formula già consolidata dalle versioni precedenti, mantenuta.
+Verifiche sensate: py_compile sui file generati è un controllo reale.
+
+⚠️ Problemi residui
+1. Link markdown ancora presenti
+[tracker.py](http://tracker.py), [nutrition.py](http://nutrition.py), [main.py](http://main.py), [LOG.md](http://LOG.md), [CLAUDE.md](http://CLAUDE.md) — problema ricorrente in tutte le versioni. A questo punto ti conviene correggere alla fonte: qual è lo strumento che usi per scrivere queste istruzioni? Notion? Se sì, disabilita l'auto-link per i nomi file.
+2. "CLI o web-based" è un'ambiguità non risolta
+
+l'app deve permettere il log dei pasti... CLI o web-based
+
+Claude deve fare una scelta architetturale significativa senza criteri. Rischi di ottenere qualcosa di ibrido o arbitrario. Decidi tu prima: se è CLI, dillo; se è web, specifica Flask/FastAPI/altro. L'ambiguità in un contesto di sviluppo ha costi reali.
+3. sqlite3 non è una dipendenza installabile
+sqlite3 è nella standard library di Python — non si installa con pip/uv. Citarlo insieme a pandas come esempio di dipendenza può confondere Claude e fargli generare un requirements.txt errato. Sostituisci con rich o click se vuoi esempi CLI realistici.
+4. Il divieto su CLAUDE.md include "leggere"
+
+È ASSOLUTAMENTE VIETATO modificare o leggere il file CLAUDE.md
+
+Vietare la lettura è controproducente: CLAUDE.md è il file di istruzioni persistenti del progetto, pensato esattamente per essere letto da Claude Code ad ogni sessione. Se lo escludi dalla lettura, stai bypassando il meccanismo principale di memoria del progetto. Togli "o leggere" — il divieto di modifica ha senso, quello di lettura no.
