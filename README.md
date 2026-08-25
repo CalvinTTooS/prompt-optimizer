@@ -78,6 +78,8 @@ Grab the latest build from the **[Releases](https://github.com/CalvinTTooS/promp
 
 Everything runs client-side in the Tauri shell; nothing passes through a server of ours.
 
+> 📖 Want the details? See **[Prompt optimization strategies](docs/optimization-strategies.md)** — what each format's strategy is and why, based on the program's real system prompts.
+
 ## Requirements
 
 - **Node.js** + npm.

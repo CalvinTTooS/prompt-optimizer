@@ -56,3 +56,6 @@ next-env.d.ts
 # workspace interni / cronologia di sviluppo (non da pubblicare)
 /.superpowers/
 /claude_code_chat_export/
+
+# tool locali portable (es. gh CLI) — ambiente self-contained, non versionato
+/.tools/

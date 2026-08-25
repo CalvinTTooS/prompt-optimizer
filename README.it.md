@@ -81,6 +81,8 @@ Scarica l'ultima versione dalla pagina **[Releases](https://github.com/CalvinTTo
 
 Tutto gira client-side nella shell Tauri; niente passa da un nostro server.
 
+> 📖 Vuoi i dettagli? Vedi **[Strategie di ottimizzazione dei prompt](docs/strategie-ottimizzazione.md)** — qual è la strategia di ciascun formato e perché, basata sui prompt di sistema reali del programma.
+
 ## Requisiti
 
 - **Node.js** + npm.

@@ -28,7 +28,7 @@ export const FLOW_CODE_INSTRUCTIONS = `
             6. "True Dynamic Generation (Native Tools)": NON hardcodare il contenuto dei file nel prompt. Descrivi i requisiti (scopo, tono, argomenti) e ordina di usare tool nativi (write_file). OBBLIGATORIO definire cosa sia un placeholder: vieta espressamente pattern come '[TODO]', '<INSERIRE CONTENUTO>', '...'.
             7. "Dependency & Virtualenv Awareness": Distingui Standard Library (es. 'pathlib') da pacchetti esterni. Comandi bash girano in subshell: DEVE usare path assoluti per l'ambiente virtuale (es. '.venv/bin/python').
             8. "Deterministic Verification": Richiedi verifiche reali (es. 'py_compile'). Se richiedi 'pytest', DEVI ordinare all'agente di creare i file di test prima di eseguirli. Niente verifiche condizionali ("se esistono...").
-            9. "Logging & Memory": Ordina di aggiornare 'WORK_LOG.md'. È VIETATO MODIFICARE 'CLAUDE.md', ma è OBBLIGATORIO LEGGERLO all'inizio.
+            9. "Logging & Memory": Ordina di aggiornare 'WORK_LOG.md' e di mantenere un loop di auto-miglioramento su 'lessons.md' (dopo ogni correzione dell'utente: annota una regola sintetica — cosa evitare/fare + perché; rileggi 'lessons.md' a inizio sessione; promuovi le lezioni stabili in 'CLAUDE.md' e rimuovile da 'lessons.md', così resta memoria di lavoro e non un archivio). È VIETATO MODIFICARE 'CLAUDE.md', ma è OBBLIGATORIO LEGGERLO all'inizio.
             10. "No Human Reminders": Il prompt parla SOLO all'agente. Nessun promemoria rivolto all'utente umano.
           `;
 
@@ -58,7 +58,8 @@ export const FLOW_GEMINI_INSTRUCTIONS = `
             5. "Modularity (@import)": Se l'input è lungo o copre più aree, proponi uno scheletro con import modulari \`@path/to/file.md\` verso sotto-file tematici, invece di un unico blob monolitico.
             6. "Reason-before-act": Istruisci l'agente a pianificare ed elencare i file che modificherà PRIMA di agire, e a fornire il contesto prima e l'istruzione specifica alla fine.
             7. "No Auto-reload Assumptions": NON scrivere contenuti che presuppongano riletture automatiche durante la sessione (l'utente deve lanciare \`/memory refresh\` a mano dopo una modifica). Le istruzioni devono essere stabili.
-            8. "No Human Reminders": Il file parla SOLO all'agente. Nessun promemoria rivolto all'utente umano.
+            8. "Self-improvement Memory": Prevedi un loop di auto-miglioramento su file \`lessons.md\`: dopo ogni correzione dell'utente l'agente annota una regola sintetica (cosa evitare/fare + perché) e rilegge \`lessons.md\` a inizio sessione; le lezioni stabili vanno promosse nel file di istruzioni principale e rimosse da \`lessons.md\`. Riferisciti al file di istruzioni per ruolo, non per nome (vedi regola 2).
+            9. "No Human Reminders": Il file parla SOLO all'agente. Nessun promemoria rivolto all'utente umano.
           `;
 
 // SCAFFOLD: meta-prompt per la modalità "Scaffold strutturato". Gemini compila
