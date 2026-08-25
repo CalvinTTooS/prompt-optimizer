@@ -1,9 +1,10 @@
 {
   "name": "prompt-optimizer",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "scripts": {
     "generate:scaffold": "node scripts/generate-scaffold-constants.mjs",
+    "sync:standards": "node scripts/sync-standards.mjs",
     "dev": "next dev",
     "prebuild": "node scripts/generate-scaffold-constants.mjs",
     "build": "next build",

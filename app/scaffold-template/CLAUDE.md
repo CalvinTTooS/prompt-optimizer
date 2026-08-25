@@ -1,6 +1,6 @@
 # CLAUDE.md — <nome progetto>
 
-> **Template v0.4.** Regole **operative** caricate in ogni sessione: tienile brevi.
+> **Template v0.5.** Regole **operative** caricate in ogni sessione: tienile brevi.
 > Il **metodo completo** (principi di ingegneria, il "perché") è in `METHOD.md`:
 > **leggilo** su decisioni architetturali o di sicurezza importanti, o quando serve
 > il razionale di una regola. `METHOD.md` è **STABILE**: non modificarlo senza
@@ -19,6 +19,9 @@ Razionale e dettaglio in `METHOD.md` §1.
 - Fai **un cambiamento piccolo e coeso** alla volta. Prima di spostare o
   rifattorizzare codice, **mappa le dipendenze** (chi lo chiama/legge — incluse le
   **variabili**, non solo le funzioni).
+- Per modifiche **non banali**: prima di consolidare, chiediti *"c'è un modo più
+  semplice/elegante?"*; se la soluzione è una pezza, rifalla pulita. **Salta per i
+  fix banali** — YAGNI vince, niente gold-plating.
 - Se il **Gate è rosso, correggi *prima* di proseguire**. Non accumulare rotture.
 - **Committa solo a Gate verde**, con messaggio (cosa + perché) e trailer di
   co-autore.
@@ -28,6 +31,9 @@ Razionale e dettaglio in `METHOD.md` §1.
 - **Riferisci con onestà**: se un test fallisce, dillo con l'output. Niente "fatto"
   senza aver letto l'**uscita del Gate**.
 - **Fermati e segnala** quando il rischio supera il beneficio.
+- Dopo una **correzione** dell'utente: aggiungi la regola in `lessons.md` (una riga
+  + perché); rileggi `lessons.md` pertinente a **inizio sessione**. Vedi `METHOD.md`
+  (loop di auto-miglioramento).
 
 ## Revisione manuale obbligatoria — non delegare la lettura all'AI
 Ispeziona a mano il codice che:
@@ -56,7 +62,7 @@ Ogni **modifica strutturale** (moduli, dipendenze, flussi, formato dati, comandi
 aggiorna **nello stesso commit** i documenti interessati — in primis `ARCHITECTURE`
 e il **diagramma a blocchi**. Una documentazione disallineata è un **bug**.
 File canonici: `README` · `USER_GUIDE` · `ARCHITECTURE` · `CHANGELOG` · `WORK_LOG`
-· `THIRD-PARTY-LICENSES` · `ACKNOWLEDGMENTS` · `ADR/` · `CONTRIBUTING`.
+· `lessons.md` · `THIRD-PARTY-LICENSES` · `ACKNOWLEDGMENTS` · `ADR/` · `CONTRIBUTING`.
 
 ---
 

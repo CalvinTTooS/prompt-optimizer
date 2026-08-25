@@ -1,20 +1,23 @@
 # METHOD.md — metodologia di sviluppo (principi stabili)
 
-> **Versione: v0.3.1.** Questo documento è la **Parte 1** del template di
-> progetto multi-piattaforma originale (`CLAUDE.md.template`): il **metodo**,
-> stabile e **agnostico rispetto alla piattaforma**. Non si modifica senza
-> **approvazione manuale ed esplicita** dell'utente.
+> **Versione: v0.5.** Questo file è il **metodo completo** (il "perché"):
+> principi di ingegneria **stabili** e **agnostici rispetto alla piattaforma**.
+> È il riferimento di [`CLAUDE.md`](../CLAUDE.md), che ne contiene la sintesi
+> operativa caricata in ogni sessione. **Leggi questo file on demand** — su
+> decisioni architetturali o di sicurezza importanti, o quando serve il razionale
+> di una regola.
+>
+> **STABILE — non modificare senza approvazione manuale ed esplicita dell'utente.**
+> Ogni modifica è un cambiamento deliberato e versionato; le note di lavoro vanno
+> in `WORK_LOG`.
 >
 > Le **direttive specifiche di questo progetto** (contesto, stack, comandi,
-> profilo di piattaforma) vivono invece in [`CLAUDE.md`](../CLAUDE.md) nella
-> root — quel file viene caricato automaticamente a ogni sessione; questo
-> documento va consultato su richiesta (pianificazione, decisioni
-> architetturali, dubbi di processo), non ricaricato per intero ogni volta.
-> Motivo dello split: la guida ufficiale sul formato CLAUDE.md raccomanda di
-> tenerlo sotto le ~200 righe e di riservarlo a contenuto specifico del
-> progetto — la metodologia generica (questo file) non ha bisogno di essere
-> ripetuta a ogni sessione. Vedi `docs/prompt-engineering-best-practices.md`
-> per le fonti.
+> profilo di piattaforma) vivono in [`CLAUDE.md`](../CLAUDE.md) nella root —
+> caricato automaticamente a ogni sessione. Motivo dello split: la guida ufficiale
+> sul formato CLAUDE.md raccomanda di tenerlo sotto le ~200 righe e di riservarlo a
+> contenuto specifico del progetto — la metodologia generica (questo file) non va
+> ripetuta a ogni sessione. Vedi `docs/prompt-engineering-best-practices.md` per le
+> fonti.
 
 Regola d'oro: **progettare prima, sviluppare dopo.** I pilastri da definire
 *prima* di scrivere codice sono la **comprensione del problema**,
@@ -390,6 +393,13 @@ nulli/vuoti e percorsi non testati; annotare in `WORK_LOG` quanto scoperto.
 **non modifica di sua iniziativa** i principi di metodo / `docs/METHOD.md`: ogni
 modifica richiede **approvazione manuale ed esplicita dell'utente** ed è un
 cambiamento deliberato e versionato; le note di lavoro vanno in `WORK_LOG`.
+
+**Loop di auto-miglioramento.** Dopo ogni correzione dell'utente, annota in
+`lessons.md` una **regola** (non un racconto): *cosa evitare / cosa fare*, in una
+riga, col perché. A inizio sessione rileggi le lezioni pertinenti al task. Tieni
+`lessons.md` corto e ad alto segnale: quando una lezione è **stabile e generale**,
+**promuovila** in `CLAUDE.md` (se operativa) o in `docs/METHOD.md` (se di metodo) e
+rimuovila da `lessons.md`. È memoria di lavoro, non un archivio.
 
 **Gate minimo prima di ogni commit** (Definition of Done del singolo passo):
 esecuzione del **comando di Gate** del progetto (→ CLAUDE.md) — test/smoke verdi +

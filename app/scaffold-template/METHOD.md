@@ -1,6 +1,6 @@
 # METHOD.md — principi di sviluppo (metodo, multi-piattaforma)
 
-> **Versione metodo: v0.4.** Questo file è il **metodo completo** (il "perché"):
+> **Versione metodo: v0.5.** Questo file è il **metodo completo** (il "perché"):
 > principi di ingegneria **stabili** e **agnostici rispetto alla piattaforma**.
 > È il riferimento di `CLAUDE.md`, che ne contiene la sintesi operativa caricata
 > in ogni sessione. **Leggi questo file on demand** — su decisioni architetturali
@@ -390,6 +390,13 @@ rilevanti sono **versionati** e riusati: sono parte del progetto, non usa-e-gett
 L'agente **non modifica di sua iniziativa** i principi di metodo: ogni modifica
 richiede **approvazione manuale ed esplicita dell'utente** ed è un cambiamento
 deliberato e versionato; le note di lavoro vanno in `WORK_LOG`.
+
+**Loop di auto-miglioramento.** Dopo ogni correzione dell'utente, annota in
+`lessons.md` una **regola** (non un racconto): *cosa evitare / cosa fare*, in una
+riga, col perché. A inizio sessione rileggi le lezioni pertinenti al task. Tieni
+`lessons.md` corto e ad alto segnale: quando una lezione è **stabile e generale**,
+**promuovila** in `CLAUDE.md` (se operativa) o in `METHOD.md` (se di metodo) e
+rimuovila da `lessons.md`. È memoria di lavoro, non un archivio.
 
 **Gate minimo prima di ogni commit** (Definition of Done del singolo passo):
 esecuzione del **comando di Gate** del progetto (→ PARTE 2) — test/smoke verdi +

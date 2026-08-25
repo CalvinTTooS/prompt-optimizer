@@ -15,6 +15,16 @@ default, senza chiedere all'utente di scegliere la modalità. L'unica eccezione 
 quando i task sono strettamente accoppiati: in quel caso è la stessa skill a
 indirizzare altrove.
 
+**Loop di auto-miglioramento** (razionale: `docs/METHOD.md`): dopo una
+**correzione** dell'utente, annota in `lessons.md` una **regola** (una riga +
+perché); rileggi `lessons.md` a **inizio sessione**. Promuovi le lezioni stabili e
+generali in `docs/METHOD.md` (metodo) o qui in `CLAUDE.md` (operativo) e rimuovile
+da `lessons.md` — è memoria di lavoro, non un archivio.
+
+**Eleganza su modifiche non banali**: prima di consolidare, chiediti se c'è un modo
+più semplice/elegante; se è una pezza, rifalla pulita. **Salta per i fix banali**
+(YAGNI, niente gold-plating).
+
 ## Contesto del progetto
 **Prompt Optimizer**. App desktop che
 prende in ingresso un prompt utente e genera fino a **cinque** varianti
