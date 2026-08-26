@@ -4,6 +4,17 @@ Tutte le modifiche rilevanti a Prompt Optimizer. Formato ispirato a
 [Keep a Changelog](https://keepachangelog.com/it/); versioni secondo
 [SemVer](https://semver.org/lang/it/).
 
+## [1.1.1] — 2026-08-26
+
+### Corretto
+- Il generatore delle costanti dello scaffold
+  (`scripts/generate-scaffold-constants.mjs`) ora **normalizza i fine-riga a LF**.
+  Legge i `.md` dal working tree, che su Windows (`core.autocrlf=true`) contiene
+  CRLF: quei `\r\n` finivano **dentro le stringhe** del file generato come
+  contenuto — dove git non può normalizzarli — rendendo l'output dipendente dalla
+  piattaforma, sporcando il repo a ogni build e incidendo CRLF negli scaffold
+  generati per gli utenti. L'output è ora deterministico e idempotente.
+
 ## [1.1.0] — 2026-08-25
 
 ### Aggiunto

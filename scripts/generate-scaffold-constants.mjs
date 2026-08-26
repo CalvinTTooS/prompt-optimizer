@@ -20,9 +20,15 @@ const files = {
   'profiles/web.md': join(templateDir, 'profiles/web.md'),
 };
 
+// Line endings are normalized to LF: the .md sources are read from the working
+// tree, which on Windows (core.autocrlf=true) holds CRLF. Those \r\n would be
+// baked into the string literals as *content* — git cannot normalize them there
+// — making the output differ per platform and dirtying the repo on every build.
+const read = (path) => readFileSync(path, 'utf8').replace(/\r\n/g, '\n');
+
 const entries = Object.entries(files)
   // JSON.stringify safely escapes newlines, quotes, backslashes and unicode.
-  .map(([key, path]) => `  ${JSON.stringify(key)}: ${JSON.stringify(readFileSync(path, 'utf8'))},`)
+  .map(([key, path]) => `  ${JSON.stringify(key)}: ${JSON.stringify(read(path))},`)
   .join('\n');
 
 const output = `// AUTO-GENERATED — do not edit by hand.
