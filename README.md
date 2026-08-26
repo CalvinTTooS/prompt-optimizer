@@ -25,7 +25,7 @@ client-side in the Tauri webview, with your API keys stored only on your device.
 
 Grab the latest build from the **[Releases](https://github.com/CalvinTTooS/prompt-optimizer/releases/latest)** page:
 
-- **Installer (recommended)**: `Prompt_optimizer_x.y.z_x64-setup.exe` — installs into your user profile, **no admin rights required**.
+- **Installer (recommended)**: `Prompt.optimizer_x.y.z_x64-setup.exe` — installs into your user profile, **no admin rights required**.
 - **Portable**: `pop_app.exe` — a single executable to copy and run (requires **WebView2**, usually already present on Windows 10/11).
 
 > ⚠️ The app is unsigned: on first launch Windows **SmartScreen** may warn you → *"More info" → "Run anyway"*.
