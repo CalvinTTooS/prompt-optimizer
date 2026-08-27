@@ -3,7 +3,14 @@ import type { OptimizerResult } from '../hooks/usePromptOptimizer';
 import { REFINE_MODELS, TIER_LABELS, type RefineModel } from '../lib/claudeRefine';
 import type { RefineViewState, EvalViewState, RefinePairViewState } from '../hooks/useClaudeRefine';
 import { type EvalVerdict } from '../lib/claudeEval';
-import { lintPrompt, type LintResult } from '../lib/promptLinter';
+import {
+  checkChat,
+  checkCowork,
+  checkCode,
+  checkGemini,
+  checkSystemUser,
+  type ConformanceResult,
+} from '../lib/conformance';
 import { toast } from '../lib/toast';
 import { useT } from '../hooks/useT';
 
@@ -64,24 +71,30 @@ function verdictLabel(verdict: EvalVerdict, t: TFunc): string {
   return t('result.verdictDaRivedere');
 }
 
-function LintBadge({ result }: { result: LintResult }) {
+// Reports how many of the rules THIS format declares are actually satisfied by
+// the generated prompt. Deliberately narrow: it says nothing about whether the
+// prompt is good, only whether it obeys the best practices we claim to apply.
+// Rule labels stay Italian, mirroring the FLOW_* rules they check in
+// app/constants/prompts.ts (translating them is a separate, optional task).
+function ConformanceBadge({ result }: { result: ConformanceResult }) {
   const { t } = useT();
-  const warns = result.issues.filter((i) => i.level === 'warn');
+  const failed = result.total - result.passed;
   return (
     <div className="mt-1 text-xs">
-      {warns.length === 0
-        ? <span className="text-green-500">{t('result.lintOk')}</span>
-        : <span className="text-amber-500">{t(warns.length === 1 ? 'result.lintIssueOne' : 'result.lintIssueOther', { n: warns.length })}</span>}
-      {result.issues.length > 0 && (
-        <details className="text-gray-400 mt-0.5">
-          <summary className="cursor-pointer">{t('result.lintDetail')}</summary>
-          <ul className="mt-1 space-y-0.5">
-            {result.issues.map((i, k) => (
-              <li key={k}>{i.level === 'warn' ? '⚠' : 'ℹ'} {i.message}</li>
-            ))}
-          </ul>
-        </details>
-      )}
+      <span className={failed === 0 ? 'text-green-500' : 'text-amber-500'}>
+        {failed === 0 ? '✓' : '⚠'} {t('result.conformance', { passed: result.passed, total: result.total })}
+      </span>
+      <details className="text-gray-400 mt-0.5">
+        <summary className="cursor-pointer">{t('result.conformanceDetail')}</summary>
+        <ul className="mt-1 space-y-0.5">
+          {result.checks.map((c) => (
+            <li key={c.id} className={c.passed ? '' : 'text-amber-400'}>
+              {c.passed ? '✓' : '⚠'} {c.label}
+              {c.evidence && <span className="text-gray-500"> — {c.evidence}</span>}
+            </li>
+          ))}
+        </ul>
+      </details>
     </div>
   );
 }
@@ -178,18 +191,17 @@ interface PairControlsProps {
   perProviderEvalState: (providerId: string) => EvalViewState;
   systemRaw: string;
   userRaw: string;
-  lintResult: LintResult;
+  conformance: ConformanceResult;
   onRefinePair: (s: string, u: string, providerId: string) => void;
   onToggleView: () => void;
   onEvaluatePair: (s: string, u: string, providerId: string) => void;
 }
 
-function PairControls({ providers, refineState: r, perProviderRefineState, evalState: ev, perProviderEvalState, systemRaw, userRaw, lintResult, onRefinePair, onToggleView, onEvaluatePair }: PairControlsProps) {
+function PairControls({ providers, refineState: r, perProviderRefineState, evalState: ev, perProviderEvalState, systemRaw, userRaw, conformance, onRefinePair, onToggleView, onEvaluatePair }: PairControlsProps) {
   const { t } = useT();
   return (
     <div className="mt-2 flex flex-col gap-2 border-t border-gray-800 pt-3">
       <p className="text-gray-500 text-[10px] uppercase tracking-widest">{t('result.pairNote')}</p>
-      <LintBadge result={lintResult} />
       {providers.length > 0 && (
         <div className="flex items-center gap-3 flex-wrap">
           {providers.flatMap((p) => {
@@ -242,6 +254,7 @@ function PairControls({ providers, refineState: r, perProviderRefineState, evalS
           )}
         </div>
       )}
+      <ConformanceBadge result={conformance} />
     </div>
   );
 }
@@ -340,7 +353,7 @@ export function ResultViewer({
                 perProviderEvalState={(providerId) => refineEvalStateFor('promptChat', providerId)}
                 onEvaluate={onEvaluate}
               />
-              <LintBadge result={lintPrompt(shownText('promptChat', result.promptChat))} />
+              <ConformanceBadge result={checkChat(shownText('promptChat', result.promptChat))} />
             </div>
           )}
           {result.promptCowork && (
@@ -359,7 +372,7 @@ export function ResultViewer({
                 perProviderEvalState={(providerId) => refineEvalStateFor('promptCowork', providerId)}
                 onEvaluate={onEvaluate}
               />
-              <LintBadge result={lintPrompt(shownText('promptCowork', result.promptCowork))} />
+              <ConformanceBadge result={checkCowork(shownText('promptCowork', result.promptCowork))} />
             </div>
           )}
           {result.promptCode && (
@@ -378,7 +391,7 @@ export function ResultViewer({
                 perProviderEvalState={(providerId) => refineEvalStateFor('promptCode', providerId)}
                 onEvaluate={onEvaluate}
               />
-              <LintBadge result={lintPrompt(shownText('promptCode', result.promptCode))} />
+              <ConformanceBadge result={checkCode(shownText('promptCode', result.promptCode))} />
             </div>
           )}
           {result.promptSystem && (
@@ -402,7 +415,7 @@ export function ResultViewer({
               perProviderEvalState={evalPairState}
               systemRaw={result.promptSystem}
               userRaw={result.promptUser}
-              lintResult={lintPrompt(`${shownSystem()}\n\n${shownUser()}`)}
+              conformance={checkSystemUser(shownSystem(), shownUser())}
               onRefinePair={onRefinePair}
               onToggleView={onToggleRefinePairView}
               onEvaluatePair={onEvaluatePair}
@@ -424,7 +437,7 @@ export function ResultViewer({
                 perProviderEvalState={(providerId) => refineEvalStateFor('promptGemini', providerId)}
                 onEvaluate={onEvaluate}
               />
-              <LintBadge result={lintPrompt(shownText('promptGemini', result.promptGemini))} />
+              <ConformanceBadge result={checkGemini(shownText('promptGemini', result.promptGemini))} />
             </div>
           )}
         </div>

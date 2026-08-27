@@ -71,6 +71,26 @@ export function buildScaffoldSchema(): ObjectSchema {
   };
 }
 
+/**
+ * Builds the meta-prompt sent to Gemini, given the per-flow instruction blocks.
+ *
+ * Lives here rather than inline in the hook so that production and the offline
+ * eval harness share ONE definition: a hand-copied mirror had already drifted
+ * (the harness was missing the formatting constraint), which meant the harness
+ * measured a prompt we never actually shipped.
+ */
+export function buildOptimizerSystemInstruction(tasks: string[]): string {
+  return `Sei un esperto Prompt Engineer. Devi generare versioni ottimizzate dello stesso prompt in base ai flussi richiesti.
+
+      Esegui ESATTAMENTE i flussi di lavoro specificati qui sotto:
+      ${tasks.join('\n')}
+
+      VINCOLO UNIVERSALE: NON modificare mai i segnaposto di anonimizzazione come [EMAIL_X], [TELEFONO_X].
+      VINCOLO DI FORMATTAZIONE (leggibilità): nei prompt generati che usano tag (es. <role>, <context>, <output_format>), separa ogni tag/sezione di primo livello con UNA RIGA VUOTA e non concatenare i tag sulla stessa riga; nei formati Markdown, separa le sezioni con una riga vuota.
+
+      Nel campo "spiegazione" fornisci una breve spiegazione delle migliorie apportate in base ai formati richiesti.`;
+}
+
 export class TruncatedResponseError extends Error {
   constructor() {
     super(

@@ -19,7 +19,14 @@ const toastError = vi.fn();
 const toastSuccess = vi.fn();
 
 vi.mock('../lib/anonymization', () => ({ runAnonymization }));
-vi.mock('../lib/promptOptimizer', () => ({ buildResponseSchema, parseOptimizerResponse }));
+// Partial mock: only the two functions this suite spies on are replaced.
+// buildOptimizerSystemInstruction stays REAL so the assertions below verify the
+// meta-prompt actually shipped, not a stand-in that could drift from it.
+vi.mock('../lib/promptOptimizer', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../lib/promptOptimizer')>()),
+  buildResponseSchema,
+  parseOptimizerResponse,
+}));
 vi.mock('../lib/nativeDownload', () => ({ saveTextFile }));
 vi.mock('../lib/logger', () => ({ logger: { error: loggerError } }));
 vi.mock('@google/generative-ai', () => ({ GoogleGenerativeAI }));

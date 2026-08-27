@@ -4,6 +4,34 @@ Tutte le modifiche rilevanti a Prompt Optimizer. Formato ispirato a
 [Keep a Changelog](https://keepachangelog.com/it/); versioni secondo
 [SemVer](https://semver.org/lang/it/).
 
+## [1.2.0] — 2026-08-27
+
+### Aggiunto
+- **Verificatore di conformità per formato** (`app/lib/conformance.ts`): controlla
+  che il prompt generato rispetti le regole che il suo formato dichiara in
+  `app/constants/prompts.ts`. In app compare come badge sotto ogni variante, con
+  l'elenco delle regole e **la prova** di ogni violazione. Verifica **solo regole
+  decidibili da un parser**: quelle che richiedono giudizio non vengono valutate,
+  per non produrre falsi positivi.
+- **Harness di regressione sui prompt** (`npm run eval`): esegue un corpus fisso
+  di **66 casi** attraverso i meta-prompt reali e riporta il **tasso di conformità
+  per regola**. Modello **fissato** (`gemini-3.5-flash-lite`) e **3 ripetizioni**
+  per caso, perché la generazione non è deterministica. È uno strumento di
+  sviluppo: non gira mai nell'app né consuma la quota dell'utente.
+
+### Modificato
+- `buildOptimizerSystemInstruction` estratta in `app/lib/promptOptimizer.ts` e
+  condivisa da produzione e harness: la copia dentro l'harness era **già
+  divergente**, quindi misurava un prompt che non abbiamo mai spedito.
+- Badge di conformità in posizione **uniforme** su tutte le varianti (prima era
+  sopra i pulsanti nella coppia System+User e sotto nelle altre).
+
+### Rimosso
+- `app/lib/promptLinter.ts`: applicava **3 regole generiche** identiche a tutti e
+  cinque i formati — mentre i flussi ne dichiarano una quarantina — e
+  **contraddiceva** i flussi in due punti (segnalava le domande di follow-up che
+  `FLOW_CHAT` prevede, e i segnaposto `{{...}}` che la rifinitura impone).
+
 ## [1.1.1] — 2026-08-26
 
 ### Corretto

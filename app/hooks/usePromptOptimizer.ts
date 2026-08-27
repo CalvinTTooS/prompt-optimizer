@@ -1,6 +1,11 @@
 import { useRef, useState } from 'react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { buildResponseSchema, parseOptimizerResponse, type OptimizerResult } from '../lib/promptOptimizer';
+import {
+  buildResponseSchema,
+  buildOptimizerSystemInstruction,
+  parseOptimizerResponse,
+  type OptimizerResult,
+} from '../lib/promptOptimizer';
 import { runAnonymization, type CensoredEntry } from '../lib/anonymization';
 import { saveTextFile } from '../lib/nativeDownload';
 import { logger } from '../lib/logger';
@@ -133,15 +138,7 @@ export function usePromptOptimizer(apiKey: string, selectedModel: string) {
       if (genSystemUser) tasks.push(FLOW_SYSTEM_USER_INSTRUCTIONS + exBlock);
       if (genGemini) tasks.push(FLOW_GEMINI_INSTRUCTIONS + exBlock);
 
-      let systemInstruction = `Sei un esperto Prompt Engineer. Devi generare versioni ottimizzate dello stesso prompt in base ai flussi richiesti.
-
-      Esegui ESATTAMENTE i flussi di lavoro specificati qui sotto:
-      ${tasks.join('\n')}
-
-      VINCOLO UNIVERSALE: NON modificare mai i segnaposto di anonimizzazione come [EMAIL_X], [TELEFONO_X].
-      VINCOLO DI FORMATTAZIONE (leggibilità): nei prompt generati che usano tag (es. <role>, <context>, <output_format>), separa ogni tag/sezione di primo livello con UNA RIGA VUOTA e non concatenare i tag sulla stessa riga; nei formati Markdown, separa le sezioni con una riga vuota.
-
-      Nel campo "spiegazione" fornisci una breve spiegazione delle migliorie apportate in base ai formati richiesti.`;
+      let systemInstruction = buildOptimizerSystemInstruction(tasks);
 
       if (enablePrivacy) {
         // Scrub any PII inside the examples before the instruction reaches

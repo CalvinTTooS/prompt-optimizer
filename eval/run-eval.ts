@@ -1,14 +1,26 @@
-// Manual best-practice evaluation runner.
+// Conformance evaluation harness.
 //
-// Runs each case in ./prompts.ts through its flow(s) using the REAL app
-// meta-prompts and schemas (imported from ../app), calling Gemini live, and
-// writes every response to a markdown log for review + best-practice scoring.
+// Runs every case in ./prompts.ts through the REAL app meta-prompts and
+// schemas (imported from ../app), calling Gemini live, then checks each
+// generated prompt against the rules its own format declares
+// (../app/lib/conformance) and reports a per-rule conformance rate.
+//
+// What the numbers mean: this FALSIFIES rules ("this one is violated at least
+// sometimes"), it does not CERTIFY them. A rule at 100% on ~10 cases says
+// little; a rule at 60% says the meta-prompt is not imposing it. Use the
+// DELTA across runs — before and after changing a meta-prompt — not the level.
+//
+// This is a development tool. It never runs in the shipped app and never
+// spends the end user's quota.
 //
 // Usage: set GEMINI_API_KEY (env or .env.local), then:
-//   npx tsx eval/run-eval.ts
-// Optional: EVAL_MODEL=gemini-2.5-flash (defaults to gemini-flash-latest).
-//
-// The API key is read from the environment / .env.local and never printed.
+//   npm run eval
+// Options:
+//   EVAL_MODEL     override the pinned model (default: gemini-3.5-flash-lite)
+//   EVAL_REPS      repetitions per case (default: 3 — Gemini is not deterministic)
+//   EVAL_FLOW      run only one flow, e.g. EVAL_FLOW=code
+//   EVAL_ONLY      run only these case ids, comma-separated
+//   EVAL_SLEEP_MS  pacing between calls (default: 13000 for the free tier)
 
 import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -24,10 +36,19 @@ import {
 import {
   buildResponseSchema,
   buildScaffoldSchema,
+  buildOptimizerSystemInstruction,
   parseOptimizerResponse,
   type OptimizerFlows,
 } from '../app/lib/promptOptimizer';
-import { buildScaffold } from '../app/lib/scaffoldBuilder';
+import {
+  checkChat,
+  checkCowork,
+  checkCode,
+  checkSystemUser,
+  checkGemini,
+  checkScaffoldProject,
+  type ConformanceResult,
+} from '../app/lib/conformance';
 
 function loadApiKey(): string {
   if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY;
@@ -38,35 +59,20 @@ function loadApiKey(): string {
   throw new Error('GEMINI_API_KEY non impostata (variabile d\'ambiente o riga in .env.local).');
 }
 
+// Pinned on purpose. `gemini-flash-latest` is a MOVING alias: Google repoints
+// it over time, which silently invalidates every historical comparison. A
+// regression baseline needs a fixed snapshot.
+const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
+
 const API_KEY = loadApiKey();
-const MODEL = process.env.EVAL_MODEL || 'gemini-flash-latest';
-// Optional filters: EVAL_FLOW=chat runs only cases for that flow;
-// EVAL_ONLY=id1,id2 runs only the listed case ids (e.g. to retry failures).
+const MODEL = process.env.EVAL_MODEL || DEFAULT_MODEL;
+const REPS = Math.max(1, Number(process.env.EVAL_REPS ?? 3));
 const ONLY_FLOW = process.env.EVAL_FLOW as EvalFlow | undefined;
-const ONLY_IDS = (process.env.EVAL_ONLY ?? '')
-  .split(',')
-  .map((s) => s.trim())
-  .filter(Boolean);
-// Free-tier Gemini is rate-limited (~5 requests/min). Pace calls to stay under
-// it; override with EVAL_SLEEP_MS=0 on a paid key.
+const ONLY_IDS = (process.env.EVAL_ONLY ?? '').split(',').map((s) => s.trim()).filter(Boolean);
 const SLEEP_MS = Number(process.env.EVAL_SLEEP_MS ?? 13000);
+
 const genAI = new GoogleGenerativeAI(API_KEY);
-
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-// Mirror of the systemInstruction wrapper in usePromptOptimizer.handleOptimize.
-// Keep in sync; the substantive per-flow content comes from the real FLOW_*
-// constants imported above.
-function buildSystemInstruction(tasks: string[]): string {
-  return `Sei un esperto Prompt Engineer. Devi generare versioni ottimizzate dello stesso prompt in base ai flussi richiesti.
-
-      Esegui ESATTAMENTE i flussi di lavoro specificati qui sotto:
-      ${tasks.join('\n')}
-
-      VINCOLO UNIVERSALE: NON modificare mai i segnaposto di anonimizzazione come [EMAIL_X], [TELEFONO_X].
-
-      Nel campo "spiegazione" fornisci una breve spiegazione delle migliorie apportate in base ai formati richiesti.`;
-}
 
 type OptFlow = Exclude<EvalFlow, 'scaffold'>;
 const FLOW_FLAG: Record<OptFlow, keyof OptimizerFlows> = {
@@ -84,7 +90,30 @@ const FLOW_INSTR: Record<OptFlow, string> = {
   gemini: FLOW_GEMINI_INSTRUCTIONS,
 };
 
-async function runOptimizerFlow(flow: OptFlow, input: string): Promise<string> {
+/** One generated artifact plus its conformance verdict. */
+interface Observation {
+  caseId: string;
+  flow: EvalFlow;
+  rep: number;
+  text: string;
+  conformance: ConformanceResult;
+}
+
+async function generateAndCheck(flow: EvalFlow, input: string): Promise<{ text: string; conformance: ConformanceResult }> {
+  if (flow === 'scaffold') {
+    const model = genAI.getGenerativeModel({
+      model: MODEL,
+      generationConfig: { responseMimeType: 'application/json', responseSchema: buildScaffoldSchema() },
+    });
+    const response = await model.startChat().sendMessage([SCAFFOLD_PROGETTO_INSTRUCTIONS, input]);
+    const finishReason = response.response.candidates?.[0]?.finishReason;
+    const { progetto } = parseOptimizerResponse<{ progetto: string }>({
+      text: response.response.text(),
+      finishReason,
+    });
+    return { text: progetto, conformance: checkScaffoldProject(progetto) };
+  }
+
   const flows: OptimizerFlows = {
     genChat: false,
     genCowork: false,
@@ -98,79 +127,180 @@ async function runOptimizerFlow(flow: OptFlow, input: string): Promise<string> {
     model: MODEL,
     generationConfig: { responseMimeType: 'application/json', responseSchema: buildResponseSchema(flows) },
   });
-  const chat = model.startChat();
-  const response = await chat.sendMessage([buildSystemInstruction([FLOW_INSTR[flow]]), input]);
+  const response = await model
+    .startChat()
+    .sendMessage([buildOptimizerSystemInstruction([FLOW_INSTR[flow]]), input]);
   const finishReason = response.response.candidates?.[0]?.finishReason;
   const parsed = parseOptimizerResponse({ text: response.response.text(), finishReason });
 
-  const parts: string[] = [`_Spiegazione:_ ${parsed.spiegazione}`];
-  if (parsed.promptChat) parts.push(`\n**Prompt Chat:**\n\n\`\`\`\n${parsed.promptChat}\n\`\`\``);
-  if (parsed.promptCowork) parts.push(`\n**Prompt Cowork:**\n\n\`\`\`\n${parsed.promptCowork}\n\`\`\``);
-  if (parsed.promptCode) parts.push(`\n**Prompt Code:**\n\n\`\`\`\n${parsed.promptCode}\n\`\`\``);
-  if (parsed.promptSystem) parts.push(`\n**System Prompt:**\n\n\`\`\`\n${parsed.promptSystem}\n\`\`\``);
-  if (parsed.promptUser) parts.push(`\n**User Prompt:**\n\n\`\`\`\n${parsed.promptUser}\n\`\`\``);
-  if (parsed.promptGemini) parts.push(`\n**GEMINI.md:**\n\n\`\`\`\n${parsed.promptGemini}\n\`\`\``);
-  return parts.join('\n');
+  switch (flow) {
+    case 'chat':
+      return { text: parsed.promptChat ?? '', conformance: checkChat(parsed.promptChat ?? '') };
+    case 'cowork':
+      return { text: parsed.promptCowork ?? '', conformance: checkCowork(parsed.promptCowork ?? '') };
+    case 'code':
+      return { text: parsed.promptCode ?? '', conformance: checkCode(parsed.promptCode ?? '') };
+    case 'gemini':
+      return { text: parsed.promptGemini ?? '', conformance: checkGemini(parsed.promptGemini ?? '') };
+    case 'systemUser': {
+      const system = parsed.promptSystem ?? '';
+      const user = parsed.promptUser ?? '';
+      return {
+        text: `--- SYSTEM ---\n${system}\n\n--- USER ---\n${user}`,
+        conformance: checkSystemUser(system, user),
+      };
+    }
+  }
 }
 
-async function runScaffold(input: string): Promise<string> {
-  const model = genAI.getGenerativeModel({
-    model: MODEL,
-    generationConfig: { responseMimeType: 'application/json', responseSchema: buildScaffoldSchema() },
-  });
-  const chat = model.startChat();
-  const response = await chat.sendMessage([SCAFFOLD_PROGETTO_INSTRUCTIONS, input]);
-  const finishReason = response.response.candidates?.[0]?.finishReason;
-  const { progetto } = parseOptimizerResponse<{ progetto: string }>({ text: response.response.text(), finishReason });
-  const files = buildScaffold(progetto);
-  const claude = files['CLAUDE.md'];
-  return [
-    `_Sezione Progetto generata da Gemini (il resto è verbatim dal template):_\n\n\`\`\`markdown\n${progetto}\n\`\`\``,
-    `\n_CLAUDE.md assemblato (${claude.split('\n').length} righe):_\n\n\`\`\`markdown\n${claude}\n\`\`\``,
-  ].join('\n');
+/** Aggregated pass rate for one rule id within one flow. */
+interface RuleStat {
+  id: string;
+  label: string;
+  passed: number;
+  total: number;
+  /** Case ids where the rule failed, for the report. */
+  failures: { caseId: string; evidence?: string }[];
+}
+
+function aggregate(observations: Observation[]): Map<EvalFlow, RuleStat[]> {
+  const byFlow = new Map<EvalFlow, Map<string, RuleStat>>();
+  for (const obs of observations) {
+    if (!byFlow.has(obs.flow)) byFlow.set(obs.flow, new Map());
+    const rules = byFlow.get(obs.flow)!;
+    for (const check of obs.conformance.checks) {
+      if (!rules.has(check.id)) {
+        rules.set(check.id, { id: check.id, label: check.label, passed: 0, total: 0, failures: [] });
+      }
+      const stat = rules.get(check.id)!;
+      stat.total += 1;
+      if (check.passed) stat.passed += 1;
+      else stat.failures.push({ caseId: obs.caseId, evidence: check.evidence });
+    }
+  }
+  const out = new Map<EvalFlow, RuleStat[]>();
+  for (const [flow, rules] of byFlow) out.set(flow, [...rules.values()]);
+  return out;
+}
+
+const pct = (n: number, d: number) => (d === 0 ? 0 : Math.round((n / d) * 100));
+/** Below this, the meta-prompt is not reliably imposing the rule. */
+const WARN_THRESHOLD = 90;
+
+function renderTable(stats: Map<EvalFlow, RuleStat[]>): string[] {
+  const out: string[] = [];
+  for (const [flow, rules] of stats) {
+    const observations = rules[0]?.total ?? 0;
+    out.push('', `## Flusso ${flow.toUpperCase()} — ${observations} osservazioni`, '');
+    out.push('| Regola | Conformi | % | |');
+    out.push('|---|---|---|---|');
+    for (const r of rules.sort((a, b) => pct(a.passed, a.total) - pct(b.passed, b.total))) {
+      const p = pct(r.passed, r.total);
+      out.push(`| \`${r.id}\` ${r.label} | ${r.passed}/${r.total} | ${p}% | ${p < WARN_THRESHOLD ? '⚠' : ''} |`);
+    }
+  }
+  return out;
 }
 
 async function main() {
   const started = new Date();
-  const lines: string[] = [
-    `# Eval best-practice — log risposte`,
-    ``,
-    `Modello: \`${MODEL}\` · Casi: ${EVAL_CASES.length} · Avvio: ${started.toISOString()}`,
-    ``,
-    `> Ogni sezione: prompt di input + flusso + risposta reale di Gemini. Da valutare contro \`docs/prompt-engineering-best-practices.md\`.`,
-    ``,
-  ];
-
   const caseWanted = (c: EvalCase) => ONLY_IDS.length === 0 || ONLY_IDS.includes(c.id);
   const matches = (flow: EvalFlow) => !ONLY_FLOW || flow === ONLY_FLOW;
   const cases = EVAL_CASES.filter(caseWanted);
-  const total = cases.reduce((s, c) => s + c.flows.filter(matches).length, 0);
+  const total = cases.reduce((s, c) => s + c.flows.filter(matches).length, 0) * REPS;
+
+  console.log(`Modello: ${MODEL} · Casi: ${cases.length} · Ripetizioni: ${REPS} · Chiamate: ${total}`);
+  console.log(`Stima: ~${Math.round((total * SLEEP_MS) / 60000)} minuti\n`);
+
+  const observations: Observation[] = [];
+  const errors: string[] = [];
   let n = 0;
+
   for (const c of cases) {
     for (const flow of c.flows) {
       if (!matches(flow)) continue;
-      n += 1;
-      if (n > 1 && SLEEP_MS > 0) await sleep(SLEEP_MS);
-      process.stdout.write(`[${n}/${total}] ${c.id} (${flow})... `);
-      lines.push(`---`, ``, `## ${c.id} — ${c.title}  ·  flusso: \`${flow}\``, ``, `**Input:**`, ``, `> ${c.input}`, ``);
-      try {
-        const out = flow === 'scaffold' ? await runScaffold(c.input) : await runOptimizerFlow(flow, c.input);
-        lines.push(out, ``);
-        process.stdout.write('ok\n');
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        lines.push(`**ERRORE:** ${msg}`, ``);
-        process.stdout.write(`ERRORE: ${msg}\n`);
+      for (let rep = 1; rep <= REPS; rep += 1) {
+        n += 1;
+        if (n > 1 && SLEEP_MS > 0) await sleep(SLEEP_MS);
+        process.stdout.write(`[${n}/${total}] ${c.id} (${flow}) ${rep}/${REPS}... `);
+        try {
+          const { text, conformance } = await generateAndCheck(flow, c.input);
+          observations.push({ caseId: c.id, flow, rep, text, conformance });
+          const failed = conformance.total - conformance.passed;
+          process.stdout.write(failed === 0 ? 'ok\n' : `${conformance.passed}/${conformance.total}\n`);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          errors.push(`${c.id} (${flow}) rep ${rep}: ${msg}`);
+          process.stdout.write(`ERRORE: ${msg}\n`);
+        }
       }
     }
   }
 
+  const stats = aggregate(observations);
+
+  // --- console summary: the headline is the per-rule rate, nothing else ---
+  console.log('\n' + '='.repeat(60));
+  console.log('CONFORMITÀ PER REGOLA');
+  console.log('='.repeat(60));
+  for (const [flow, rules] of stats) {
+    console.log(`\n${flow.toUpperCase()} (${rules[0]?.total ?? 0} osservazioni)`);
+    for (const r of rules.sort((a, b) => pct(a.passed, a.total) - pct(b.passed, b.total))) {
+      const p = pct(r.passed, r.total);
+      console.log(
+        `  ${r.id.padEnd(28)} ${String(r.passed).padStart(3)}/${String(r.total).padEnd(3)} ${String(p).padStart(3)}%  ${p < WARN_THRESHOLD ? '⚠' : ''}`,
+      );
+    }
+  }
+  if (errors.length) console.log(`\n${errors.length} chiamate fallite (vedi il report).`);
+
+  // --- markdown report, with the evidence for every failure ---
+  const lines: string[] = [
+    '# Eval di conformità',
+    '',
+    `Modello: \`${MODEL}\` · Casi: ${cases.length} · Ripetizioni: ${REPS} · Avvio: ${started.toISOString()}`,
+    '',
+    '> I numeri servono a **falsificare** una regola, non a certificarla. Confronta il',
+    '> **delta** tra due esecuzioni (prima/dopo una modifica ai meta-prompt), non il livello.',
+    ...renderTable(stats),
+  ];
+
+  for (const [flow, rules] of stats) {
+    const failing = rules.filter((r) => r.failures.length > 0);
+    if (failing.length === 0) continue;
+    lines.push('', `### Violazioni — ${flow}`, '');
+    for (const r of failing) {
+      lines.push(`**\`${r.id}\`** — ${r.label}`, '');
+      for (const f of r.failures.slice(0, 10)) {
+        lines.push(`- \`${f.caseId}\`${f.evidence ? `: ${f.evidence}` : ''}`);
+      }
+      if (r.failures.length > 10) lines.push(`- …e altre ${r.failures.length - 10}`);
+      lines.push('');
+    }
+  }
+
+  if (errors.length) {
+    lines.push('', '## Chiamate fallite', '', ...errors.map((e) => `- ${e}`));
+  }
+
+  lines.push('', '---', '', '## Prompt generati', '');
+  for (const obs of observations) {
+    lines.push(
+      `### ${obs.caseId} · ${obs.flow} · rep ${obs.rep} — ${obs.conformance.passed}/${obs.conformance.total}`,
+      '',
+      '```',
+      obs.text,
+      '```',
+      '',
+    );
+  }
+
   mkdirSync('eval/output', { recursive: true });
   const stamp = started.toISOString().replace(/[:.]/g, '-');
-  const path = `eval/output/eval-log-${stamp}.md`;
+  const path = `eval/output/eval-${stamp}.md`;
   writeFileSync(path, lines.join('\n'));
   writeFileSync('eval/output/latest.md', lines.join('\n'));
-  console.log(`\nLog scritto in ${path} (e eval/output/latest.md).`);
+  console.log(`\nReport in ${path} (e eval/output/latest.md).`);
 }
 
 main().catch((e) => {
