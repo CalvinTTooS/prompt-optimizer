@@ -79,11 +79,12 @@ export function buildScaffoldSchema(): ObjectSchema {
  * (the harness was missing the formatting constraint), which meant the harness
  * measured a prompt we never actually shipped.
  */
-export function buildOptimizerSystemInstruction(tasks: string[]): string {
+export function buildOptimizerSystemInstruction(tasks: string[], examplesBlock = ''): string {
   return `Sei un esperto Prompt Engineer. Genera versioni ottimizzate dello stesso prompt, una per ciascun flusso richiesto.
 
       Applica i flussi di lavoro specificati qui sotto, ognuno con le sue regole:
       ${tasks.join('\n')}
+${examplesBlock}
 
       Vincolo comune a tutti i flussi — segnaposto: riporta i segnaposto di anonimizzazione (es. [EMAIL_X], [TELEFONO_X]) esattamente come li ricevi. Sostituiscono dati personali dell'utente e vengono ripristinati dopo la generazione: un segnaposto alterato non è più riconoscibile e il dato originale va perso.
 

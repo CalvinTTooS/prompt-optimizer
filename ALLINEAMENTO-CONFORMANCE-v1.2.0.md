@@ -44,22 +44,27 @@ Se lo stato non corrisponde, **fermati e segnala**.
 
 ---
 
-## 1. Copia i file nuovi dall'edizione pubblica
+## 1. Copia i file nuovi dal pacchetto
 
-Tre file vanno copiati **verbatim** dalla cartella sorella
-`C:\GitHubRepo\Projects\Prompt optimizer\`:
+Questo documento arriva insieme a una cartella **`file-da-copiare/`** che
+contiene tutti i file da copiare verbatim, con la stessa struttura di cartelle
+del progetto. Il pacchetto è **autonomo**: non serve accedere al repo pubblico.
 
-| Sorgente | Destinazione |
+| Nel pacchetto | Destinazione nel repo |
 |---|---|
-| `app/lib/conformance.ts` | `app/lib/conformance.ts` |
-| `app/lib/conformance.test.ts` | `app/lib/conformance.test.ts` |
-| `eval/prompts.ts` | `eval/prompts.ts` (**sovrascrive** il corpus esistente) |
+| `file-da-copiare/app/lib/conformance.ts` | `app/lib/conformance.ts` |
+| `file-da-copiare/app/lib/conformance.test.ts` | `app/lib/conformance.test.ts` |
+| `file-da-copiare/eval/prompts.ts` | `eval/prompts.ts` (**sovrascrive** il corpus esistente) |
+
+Gli altri file del pacchetto servono ai passi successivi:
+`eval/run-eval.ts` (passo 5), `app/constants/prompts.ts` (passo 12-quater),
+`docs/eval-baseline.md` (passo 12-ter, **da svuotare dei dati**).
 
 ⚠️ **Normalizza i fine-riga a LF** dopo la copia se il repo di destinazione usa
-LF: i file copiati dal working tree Windows arrivano con CRLF.
+LF: i file del pacchetto potrebbero arrivare con CRLF.
 
-⚠️ Se la cartella sorgente non è accessibile, **fermati e segnala**: non
-riscrivere questi file a memoria.
+⚠️ Se un file del pacchetto manca, **fermati e segnala**: non riscriverlo a
+memoria.
 
 **Verifica**: `npx vitest run app/lib/conformance.test.ts` → **41 test verdi**.
 
@@ -523,6 +528,121 @@ EVAL_FLOW=gemini npm run eval    # 10 casi × 3 = 30 chiamate, ~7 minuti
 
 È già successo (2026-08-27: 51 chiamate perse in blocco, il flusso `gemini`
 ridotto a 3 osservazioni su 30).
+
+---
+
+## 12-quinquies. L8 — esempi few-shot iniettati una volta sola
+
+**Il difetto**: `exBlock` era appeso a **ciascun** flusso, quindi con cinque
+formati selezionati gli stessi esempi finivano **cinque volte** nella stessa
+richiesta. Il blocco porta già in testa *"per tutti i formati selezionati"*: era
+scritto per **un'iniezione sola**, e la duplicazione contraddiceva il suo stesso
+testo. È il percorso più probabile verso una risposta troncata.
+
+**In `app/lib/promptOptimizer.ts`**, aggiungi il secondo parametro alla funzione:
+
+```typescript
+export function buildOptimizerSystemInstruction(tasks: string[], examplesBlock = ''): string {
+```
+
+e inserisci `${examplesBlock}` su una riga propria **subito dopo**
+`${tasks.join('\n')}`.
+
+**In `app/hooks/usePromptOptimizer.ts`**, togli `+ exBlock` da tutte e cinque le
+righe `tasks.push(...)` e passalo invece alla funzione:
+
+```typescript
+      // The examples block is appended ONCE, not per flow: its own preamble
+      // already reads "per tutti i formati selezionati", so repeating it per
+      // flow duplicated the same text up to five times in a single request —
+      // wasted tokens and the most likely path to a truncated response.
+      const exBlock = buildExamplesBlock(examples);
+      const tasks: string[] = [];
+      if (genChat) tasks.push(FLOW_CHAT_INSTRUCTIONS);
+      if (genCowork) tasks.push(FLOW_COWORK_INSTRUCTIONS);
+      if (genCode) tasks.push(FLOW_CODE_INSTRUCTIONS);
+      if (genSystemUser) tasks.push(FLOW_SYSTEM_USER_INSTRUCTIONS);
+      if (genGemini) tasks.push(FLOW_GEMINI_INSTRUCTIONS);
+```
+
+```typescript
+      let systemInstruction = buildOptimizerSystemInstruction(tasks, exBlock);
+```
+
+**Test di regressione da aggiungere** in `usePromptOptimizer.test.ts` (senza di
+esso la duplicazione può tornare inosservata):
+
+```typescript
+  test('inietta il blocco di esempi UNA sola volta anche con più flussi', async () => {
+    const { result } = renderHook(() => usePromptOptimizer('sk-key', 'gemini-flash'));
+    act(() => {
+      result.current.setInput('ottimizza questo');
+      result.current.setGenCowork(true);
+      result.current.setGenCode(true);
+      result.current.setGenSystemUser(true);
+      result.current.setGenGemini(true);
+    });
+    await act(async () => {
+      await result.current.handleOptimize([{ content: 'ESEMPIO UNICO' }]);
+    });
+
+    const sent = sendMessage.mock.calls[0][0] as string[];
+    const occurrences = sent.join('\n').split('ESEMPIO UNICO').length - 1;
+    expect(occurrences).toBe(1);
+  });
+```
+
+---
+
+## 12-sexies. L9 — non imporre `temperature`
+
+**Il difetto**: `generationConfig` imponeva `temperature: 0.5` a **qualunque**
+modello l'utente scegliesse. Google, per la famiglia Gemini 3.x: *"we **strongly
+recommend** keeping them at their default values"* e *"If your existing code
+explicitly sets temperature (especially to low values for deterministic outputs),
+we recommend **removing this parameter**"* — con l'avvertenza che valori bassi
+possono causare **looping o degrado** su task complessi.
+
+**Il motivo che lo rende urgente è però interno**: l'harness **non** imposta
+`temperature`, la produzione sì. Finché differiscono, ogni baseline misurata
+descrive una configurazione diversa da quella spedita — e porta un asterisco.
+
+**In `app/hooks/usePromptOptimizer.ts`**, sostituisci il `generationConfig` con:
+
+```typescript
+        // No `temperature`: Google recommends leaving sampling at the model
+        // default for the Gemini 3.x family — "If your existing code explicitly
+        // sets temperature (especially to low values for deterministic
+        // outputs), we recommend removing this parameter" — warning that low
+        // values can cause looping or degradation on complex tasks. Dropping it
+        // also makes production match the eval harness, which never set it: as
+        // long as they differ, every measured baseline carries an asterisk.
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema,
+        },
+```
+
+**Test da aggiornare**: quello che asseriva `temperature: 0.5` deve ora asserire
+`generationConfig` **in modo esatto**, così che una reintroduzione fallisca:
+
+```typescript
+    expect(getGenerativeModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: expect.anything(),
+        },
+      }),
+    );
+```
+
+⚠️ **Valutazione da fare nel fork**: se il tuo repo permette di scegliere anche
+modelli Gemini 2.x, quelli useranno il proprio default invece di 0.5. La
+raccomandazione di Google è specifica per la famiglia 3.x; il whitepaper 2024
+suggeriva valori bassi per i modelli precedenti. Decisione presa nel repo
+pubblico: **rimuovere**, perché la lista modelli è caricata live e l'utente
+sceglierà modelli recenti.
 
 ---
 

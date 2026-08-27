@@ -123,22 +123,32 @@ export function usePromptOptimizer(apiKey: string, selectedModel: string) {
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({
         model: selectedModel,
+        // No `temperature`: Google recommends leaving sampling at the model
+        // default for the Gemini 3.x family — "If your existing code explicitly
+        // sets temperature (especially to low values for deterministic
+        // outputs), we recommend removing this parameter" — warning that low
+        // values can cause looping or degradation on complex tasks. Dropping it
+        // also makes production match the eval harness, which never set it: as
+        // long as they differ, every measured baseline carries an asterisk.
         generationConfig: {
           responseMimeType: 'application/json',
           responseSchema,
-          temperature: 0.5,
         },
       });
 
+      // The examples block is appended ONCE, not per flow: its own preamble
+      // already reads "per tutti i formati selezionati", so repeating it per
+      // flow duplicated the same text up to five times in a single request —
+      // wasted tokens and the most likely path to a truncated response.
       const exBlock = buildExamplesBlock(examples);
       const tasks: string[] = [];
-      if (genChat) tasks.push(FLOW_CHAT_INSTRUCTIONS + exBlock);
-      if (genCowork) tasks.push(FLOW_COWORK_INSTRUCTIONS + exBlock);
-      if (genCode) tasks.push(FLOW_CODE_INSTRUCTIONS + exBlock);
-      if (genSystemUser) tasks.push(FLOW_SYSTEM_USER_INSTRUCTIONS + exBlock);
-      if (genGemini) tasks.push(FLOW_GEMINI_INSTRUCTIONS + exBlock);
+      if (genChat) tasks.push(FLOW_CHAT_INSTRUCTIONS);
+      if (genCowork) tasks.push(FLOW_COWORK_INSTRUCTIONS);
+      if (genCode) tasks.push(FLOW_CODE_INSTRUCTIONS);
+      if (genSystemUser) tasks.push(FLOW_SYSTEM_USER_INSTRUCTIONS);
+      if (genGemini) tasks.push(FLOW_GEMINI_INSTRUCTIONS);
 
-      let systemInstruction = buildOptimizerSystemInstruction(tasks);
+      let systemInstruction = buildOptimizerSystemInstruction(tasks, exBlock);
 
       if (enablePrivacy) {
         // Scrub any PII inside the examples before the instruction reaches

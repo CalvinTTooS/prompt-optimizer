@@ -321,14 +321,42 @@ describe('usePromptOptimizer', () => {
     );
   });
 
-  test('passa temperature 0.5 e la regola di formattazione', async () => {
+  // The examples block carries its own "per tutti i formati selezionati"
+  // preamble, so one copy covers every flow. Repeating it per flow wasted
+  // tokens and was the most likely path to a truncated response.
+  test('inietta il blocco di esempi UNA sola volta anche con più flussi', async () => {
+    const { result } = renderHook(() => usePromptOptimizer('sk-key', 'gemini-flash'));
+    act(() => {
+      result.current.setInput('ottimizza questo');
+      result.current.setGenCowork(true);
+      result.current.setGenCode(true);
+      result.current.setGenSystemUser(true);
+      result.current.setGenGemini(true);
+    });
+    await act(async () => {
+      await result.current.handleOptimize([{ content: 'ESEMPIO UNICO' }]);
+    });
+
+    const sent = sendMessage.mock.calls[0][0] as string[];
+    const occurrences = sent.join('\n').split('ESEMPIO UNICO').length - 1;
+    expect(occurrences).toBe(1);
+  });
+
+  test('non imposta temperature e passa i vincoli comuni', async () => {
     const { result } = renderHook(() => usePromptOptimizer('sk-key', 'gemini-flash'));
     act(() => { result.current.setInput('ottimizza questo'); });
     await act(async () => { await result.current.handleOptimize(); });
 
+    // Asserting generationConfig EXACTLY (not objectContaining) so that
+    // re-introducing `temperature` fails loudly: Google recommends the model
+    // default for Gemini 3.x, and omitting it keeps production identical to the
+    // eval harness — while they differ, every measured baseline is suspect.
     expect(getGenerativeModel).toHaveBeenCalledWith(
       expect.objectContaining({
-        generationConfig: expect.objectContaining({ temperature: 0.5 }),
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: expect.anything(),
+        },
       }),
     );
     // Pins the two constraints shared by every flow. Asserting the substance
