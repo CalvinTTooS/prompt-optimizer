@@ -1,44 +1,44 @@
 export const FLOW_CHAT_INSTRUCTIONS = `
           === FLUSSO 1: CLAUDE CHAT (Web UI) ===
-          - Obiettivo: Ottimizzare per l'interazione umana, discorsiva e iterativa.
-          - Struttura: Usa tag XML standard (<role>, <context>, <goal>, <output_format>).
-          - Stile: Naturale, chiaro, focalizzato su istruzioni passo-passo.
-          - Few-shot CONDIZIONALE: se il task ha un formato/pattern ripetuto (tabella, classificazione, estrazione, trasformazione strutturata), includi UN esempio concreto input→output dentro <output_format>. Se il task è aperto (narrazione, spiegazione, consiglio, scrittura creativa), NON inventare esempi: investi invece in <role> e <output_format>.
-          - Domanda di follow-up SOLO per i task conversazionali/esplicativi, non per quelli a output chiuso (una tabella, una riscrittura, una classificazione).
+          - Obiettivo: ottimizzare per l'interazione umana, discorsiva e iterativa.
+          - Struttura: usa i tag XML <role>, <context>, <goal>, <output_format>. Apri e chiudi ciascun tag (</role>, </context>, </goal>, </output_format>): un tag lasciato aperto annulla il vantaggio della delimitazione, perché il modello non distingue più dove finisce una sezione e dove inizia la successiva.
+          - Stile: naturale e chiaro, con le istruzioni in sequenza.
+          - Few-shot condizionale: se il task ha un formato ripetuto (tabella, classificazione, estrazione, trasformazione strutturata), includi un esempio input→output dentro <output_format>. Se il task è aperto (narrazione, spiegazione, consiglio, scrittura creativa), investi invece in <role> e <output_format>: su un task aperto un esempio inventato àncora il modello a un caso particolare invece di guidarlo.
+          - Domanda di follow-up: includila nei task conversazionali o esplicativi. Su un output chiuso (una tabella, una riscrittura, una classificazione) è rumore, perché la risposta è già completa.
           `;
 
 export const FLOW_COWORK_INSTRUCTIONS = `
           === FLUSSO 2: CLAUDE COWORK (Workspace Agent) ===
-          - Obiettivo: Ottimizzare per un agente collaborativo in un ambiente di lavoro condiviso.
-          - Struttura: Usa tag orientati al workspace (<system>, <workspace_context>, <primary_task>, <collaboration_rules>).
-          - Regole specifiche: Definisci i confini dell'agente (cosa può/non può modificare) e istruzioni su quando chiedere feedback umano.
+          - Obiettivo: ottimizzare per un agente collaborativo in un ambiente di lavoro condiviso.
+          - Struttura: usa i tag <system>, <workspace_context>, <primary_task>, <collaboration_rules>, aprendo e chiudendo ciascuno di essi.
+          - Confini e approvazioni: dichiara che cosa l'agente può modificare, che cosa deve lasciare intatto, e in quali momenti si ferma a chiedere conferma. In un workspace condiviso una modifica non concordata è costosa da annullare, quindi i confini vanno scritti invece che lasciati impliciti.
           `;
 
 // FLUSSO 3 AGGIORNATO: INTERNAL CONSISTENCY, NO LOOPHOLES, STRICT PATHS
 export const FLOW_CODE_INSTRUCTIONS = `
           === FLUSSO 3: CLAUDE CODE (CLI Agent) ===
           - Obiettivo: Ottimizzare per l'esecuzione autonoma nel terminale locale.
-          - Struttura: Markdown puro e strutturato (NIENTE tag XML verbosi).
-          - Regole TASSATIVE (pena il fallimento e la regressione del prompt):
-            1. "Context First & STRICT Paths": Inizia con '## Contesto del progetto'. Usa ESCLUSIVAMENTE path racchiusi in backtick (es. \`src/main.py\`). È ASSOLUTAMENTE VIETATO formattare i file locali come link Markdown testuali (vietato: [main.py](http://main.py)). Pena: fallimento generazione.
-            2. "Internal Consistency": Mantieni coerenza assoluta nei nomi dei file e delle directory. Se definisci una cartella nel Contesto (es. \`docs/course/\`), usa ESATTAMENTE la stessa cartella nel Piano e nelle Istruzioni Operative. Niente variazioni arbitrarie.
-            3. "Architectural Clarity (No Loopholes)": Fai scelte architetturali nette e deterministiche. Evita frasi ambigue o scappatoie come "se non per i template iniziali". Definisci chiaramente come i testi/codici verranno generati senza lasciare zone d'ombra.
-            4. "Plan Mode Mechanics": Inserisci '## Generazione del Piano Operativo' subito dopo il contesto. Ordina all'agente di presentare un piano numerato e di "FERMARSI ATTENDENDO APPROVAZIONE" prima di elencare le istruzioni operative.
-            5. "Safety & Branching": Nelle istruzioni operative, ordina di lavorare SEMPRE su un branch separato (es. 'git checkout -b').
-            6. "True Dynamic Generation (Native Tools)": NON hardcodare il contenuto dei file nel prompt. Descrivi i requisiti (scopo, tono, argomenti) e ordina di usare tool nativi (write_file). OBBLIGATORIO definire cosa sia un placeholder: vieta espressamente pattern come '[TODO]', '<INSERIRE CONTENUTO>', '...'.
-            7. "Dependency & Virtualenv Awareness": Distingui Standard Library (es. 'pathlib') da pacchetti esterni. Comandi bash girano in subshell: DEVE usare path assoluti per l'ambiente virtuale (es. '.venv/bin/python').
-            8. "Deterministic Verification": Richiedi verifiche reali (es. 'py_compile'). Se richiedi 'pytest', DEVI ordinare all'agente di creare i file di test prima di eseguirli. Niente verifiche condizionali ("se esistono...").
-            9. "Logging & Memory": Ordina di aggiornare 'WORK_LOG.md' e di mantenere un loop di auto-miglioramento su 'lessons.md' (dopo ogni correzione dell'utente: annota una regola sintetica — cosa evitare/fare + perché; rileggi 'lessons.md' a inizio sessione; promuovi le lezioni stabili in 'CLAUDE.md' e rimuovile da 'lessons.md', così resta memoria di lavoro e non un archivio). È VIETATO MODIFICARE 'CLAUDE.md', ma è OBBLIGATORIO LEGGERLO all'inizio.
-            10. "No Human Reminders": Il prompt parla SOLO all'agente. Nessun promemoria rivolto all'utente umano.
+          - Struttura: Markdown puro e strutturato, senza tag XML: l'agente CLI legge file di istruzioni in Markdown, e i tag lo porterebbero a trattare il prompt come dati da elaborare.
+          - Regole del formato:
+            1. "Context First & Strict Paths": inizia con '## Contesto del progetto'. Scrivi i percorsi dei file locali in backtick (es. \`src/main.py\`), perché l'agente li usa come percorsi reali; un link Markdown come [main.py](http://main.py) lo porterebbe invece a cercare una risorsa remota inesistente.
+            2. "Internal Consistency": usa gli stessi nomi di file e cartelle in tutto il prompt. Se dichiari \`docs/course/\` nel Contesto, riprendi quel percorso identico nel Piano e nelle Istruzioni Operative: l'agente crea le cartelle che legge, quindi una variazione produce due alberi diversi.
+            3. "Architectural Clarity": fai scelte architetturali nette. Formula ogni decisione in modo che abbia una sola lettura possibile, evitando riserve come "se non per i template iniziali": una zona d'ombra costringe l'agente a decidere da solo, e lo farà in modo diverso a ogni esecuzione.
+            4. "Plan Mode Mechanics": inserisci '## Generazione del Piano Operativo' subito dopo il contesto. Chiedi all'agente di presentare un piano numerato e di "FERMARSI ATTENDENDO APPROVAZIONE" prima delle istruzioni operative, così l'utente intercetta un piano sbagliato prima che diventi lavoro svolto.
+            5. "Safety & Branching": nelle istruzioni operative, fai lavorare l'agente su un branch separato (es. 'git checkout -b'), così il ramo principale resta ripristinabile se l'esecuzione va storta.
+            6. "True Dynamic Generation": descrivi i requisiti del contenuto (scopo, tono, argomenti) e fai generare i file con i tool nativi (write_file), invece di incorporarne il testo nel prompt: un contenuto incollato nel prompt non è più aggiornabile dall'agente e gonfia il contesto. Nel prompt generato chiedi contenuti completi, elencando i segnaposto da evitare ('[TODO]', '<INSERIRE CONTENUTO>', '...'), perché un file consegnato con segnaposto richiede comunque un secondo passaggio umano.
+            7. "Dependency Awareness": distingui la libreria standard (es. 'pathlib') dai pacchetti esterni. Se il progetto usa un ambiente virtuale, indica l'interprete col percorso completo (es. '.venv/bin/python'), perché ogni comando bash parte in una subshell che non eredita l'attivazione. Se il linguaggio non è desumibile dall'input, dichiara l'assunzione che stai facendo invece di lasciarla implicita.
+            8. "Deterministic Verification": chiedi verifiche eseguibili (es. 'py_compile'). Se il piano prevede 'pytest', fai creare i file di test prima di eseguirli, e formula le verifiche in modo incondizionato: una verifica del tipo "se esistono, esegui i test" può essere soddisfatta senza eseguire nulla.
+            9. "Logging & Memory": fai aggiornare 'WORK_LOG.md' e mantenere un loop di auto-miglioramento su 'lessons.md' (dopo ogni correzione dell'utente: annota una regola sintetica — cosa evitare o fare, col perché; rileggi 'lessons.md' a inizio sessione; promuovi le lezioni stabili in 'CLAUDE.md' e rimuovile da 'lessons.md', così resta memoria di lavoro e non un archivio). Fai leggere 'CLAUDE.md' all'inizio e lascialo invariato: contiene le direttive di progetto decise dall'utente, che l'agente riceve ma non negozia.
+            10. "No Human Reminders": scrivi il prompt come se l'unico lettore fosse l'agente. Un promemoria rivolto all'utente resterebbe senza destinatario, perché nessuno lo legge durante l'esecuzione.
           `;
 
 export const FLOW_SYSTEM_USER_INSTRUCTIONS = `
           === FLUSSO 4: SYSTEM PROMPT + USER PROMPT (API strutturata) ===
           - Obiettivo: Dividere il prompt grezzo in una coppia System Prompt / User Prompt secondo le convenzioni delle API (campo "system" vs turno "user").
-          - Criterio di instradamento OBBLIGATORIO per ogni frammento del prompt: "questa istruzione resterebbe identica se l'utente rieseguisse il task domani con dati diversi?". Se SÌ → System Prompt. Se NO → User Prompt.
-          - Verso il System Prompt: ruolo/persona, vincoli di stile/tono/lunghezza, formato di output, regole di sicurezza o guardrail, few-shot examples riutilizzabili.
-          - Verso lo User Prompt: la richiesta/task concreto, dati o documenti specifici di questa esecuzione (anche se lunghi, posizionali all'inizio del blocco User), domande puntuali.
-          - Regole TASSATIVE: lo User Prompt risultante non può MAI essere vuoto (deve contenere sempre almeno il task concreto); NON duplicare contenuto identico in entrambi i campi; se una frase mescola un'istruzione persistente con un dato di richiesta, separale esplicitamente invece di lasciarle ambigue.
+          - Criterio di instradamento, da applicare a ogni frammento del prompt: "questa istruzione resterebbe identica se l'utente rieseguisse il task domani con dati diversi?". Se sì → System Prompt. Se no → User Prompt. È il criterio che rende il System riutilizzabile fra esecuzioni: tutto ciò che cambia da una volta all'altra appartiene allo User.
+          - Verso il System Prompt: ruolo/persona, vincoli di stile/tono/lunghezza, formato di output, regole di sicurezza o guardrail, esempi few-shot riutilizzabili.
+          - Verso lo User Prompt: la richiesta concreta, i dati o documenti specifici di questa esecuzione (se lunghi, mettili all'inizio del blocco User), le domande puntuali.
+          - Regole del formato: lo User Prompt contiene sempre almeno il task concreto — se l'input descrive solo un ruolo e nessun compito, formula tu un primo task esemplificativo coerente col ruolo, perché una coppia con lo User vuoto non è eseguibile via API. Evita di ripetere lo stesso contenuto nei due campi: una regola duplicata diventa due regole da tenere allineate. Se una frase mescola un'istruzione persistente e un dato di questa richiesta, separale invece di lasciarle insieme.
           `;
 
 // FLUSSO 5: file di istruzioni per Gemini CLI (genere GEMINI.md). Basato sulla
@@ -50,11 +50,11 @@ export const FLOW_GEMINI_INSTRUCTIONS = `
           === FLUSSO 5: FILE ISTRUZIONI GEMINI (genere GEMINI.md) ===
           - Obiettivo: Generare un file di contesto/istruzioni per Gemini CLI (default \`GEMINI.md\`), analogo a CLAUDE.md ma adattato alle convenzioni native di Gemini CLI.
           - Struttura: Markdown puro, heading (\`##\`) e bullet ad alto segnale. Conciso e NON ridondante: ogni riga deve superare il test "se la rimuovessi, l'agente sbaglierebbe?".
-          - Regole TASSATIVE:
+          - Regole del formato:
             1. "Hierarchical Awareness": Gemini CLI carica e CONCATENA i file gerarchicamente (globale \`~/.gemini/\` → root progetto → sottodirectory), con "closest file wins". Genera contenuto adatto al livello dichiarato dall'utente (se non dichiarato, assumi root di progetto) e NON ripetere regole che apparterrebbero a un livello superiore.
-            2. "Filename Neutrality": Il nome del file è configurabile (\`context.fileName\`, può essere \`AGENTS.md\`). È VIETATO auto-referenziare il file come "questo GEMINI.md" o dipendere dal suo nome fisico: il contenuto deve funzionare anche se rinominato/aliasato.
+            2. "Filename Neutrality": il nome del file è configurabile (\`context.fileName\`, può essere \`AGENTS.md\`). Riferisciti al file per il suo ruolo e non per il nome — evita formule come "questo GEMINI.md" — perché il contenuto deve restare valido anche se l'utente lo rinomina o lo aliasa.
             3. "AGENTS.md Interoperability": Includi sezioni compatibili con lo standard aperto AGENTS.md: comandi build/test, code style, convenzioni di commit/PR.
-            4. "Verifiable Specificity": Comandi build/test CONCRETI e verificabili (es. \`npm test\`), MAI frasi generiche tipo "scrivi codice pulito" o "testa le tue modifiche".
+            4. "Verifiable Specificity": dai comandi di build e test concreti ed eseguibili (es. \`npm test\`), perché l'agente li lancia davvero e una frase come "scrivi codice pulito" o "testa le tue modifiche" non è eseguibile. Se l'input non dichiara la toolchain, scegli la convenzione più diffusa per quel linguaggio, dichiara l'assunzione in una riga (es. "assumo npm; sostituisci se il progetto usa un altro gestore") e fornisci comunque i comandi concreti sotto quell'assunzione: un comando dichiaratamente assunto è correggibile, una frase generica no.
             5. "Modularity (@import)": Se l'input è lungo o copre più aree, proponi uno scheletro con import modulari \`@path/to/file.md\` verso sotto-file tematici, invece di un unico blob monolitico.
             6. "Reason-before-act": Istruisci l'agente a pianificare ed elencare i file che modificherà PRIMA di agire, e a fornire il contesto prima e l'istruzione specifica alla fine.
             7. "No Auto-reload Assumptions": NON scrivere contenuti che presuppongano riletture automatiche durante la sessione (l'utente deve lanciare \`/memory refresh\` a mano dopo una modifica). Le istruzioni devono essere stabili.
@@ -84,7 +84,7 @@ Elenco puntato: Setup ambiente, Avvio / run, Test (baseline), Lint / format, e i
 ## Profilo di piattaforma
 NON forzare una piattaforma. Scrivi l'istruzione: scegliere un profilo da \`profiles/\` (desktop · android · web) e incollarne il contenuto qui quando la piattaforma è decisa; fino ad allora lavorare sul core agnostico (\`METHOD.md\` §1.1).
 
-REGOLE TASSATIVE:
+REGOLE DEL FORMATO:
 - Contenuto ad alto segnale e verificabile: comandi concreti, non frasi generiche.
 - Se un'informazione non è deducibile dalla descrizione, usa un placeholder chiaro tra parentesi angolari (es. \`<da definire>\`), NON inventare dettagli falsi.
 - NON riscrivere le regole operative dello scaffold (workflow, sicurezza, igiene): quelle sono fisse e non fanno parte del tuo output.

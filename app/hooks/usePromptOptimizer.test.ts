@@ -331,8 +331,14 @@ describe('usePromptOptimizer', () => {
         generationConfig: expect.objectContaining({ temperature: 0.5 }),
       }),
     );
+    // Pins the two constraints shared by every flow. Asserting the substance
+    // rather than a heading keeps the test meaningful across rewordings, while
+    // still failing if a constraint is dropped.
     expect(sendMessage).toHaveBeenCalledWith(
-      expect.arrayContaining([expect.stringContaining('VINCOLO DI FORMATTAZIONE')]),
+      expect.arrayContaining([expect.stringContaining('riga vuota le sezioni di primo livello')]),
+    );
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.stringContaining('segnaposto di anonimizzazione')]),
     );
   });
 });

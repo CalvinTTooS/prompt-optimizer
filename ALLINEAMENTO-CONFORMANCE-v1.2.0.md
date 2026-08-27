@@ -368,6 +368,96 @@ feat(conformance): verificatore per formato + harness di regressione sui prompt
 
 ---
 
+## 12-bis. Modalità multi-flusso dell'harness
+
+Già inclusa se hai copiato `eval/run-eval.ts` al passo 5. Serve a misurare il
+costo del batching: la run di default esegue **un formato per chiamata** (il caso
+migliore), mentre la produzione ne genera fino a cinque insieme.
+
+```bash
+npm run eval                 # un formato per chiamata
+EVAL_MULTI=1 npm run eval    # cinque formati in una chiamata, come la produzione
+```
+
+I due report finiscono in file distinti (`latest-single.md` / `latest-multi.md`):
+confonderli invaliderebbe il confronto.
+
+---
+
+## 12-ter. Registro della baseline
+
+Copia `docs/eval-baseline.md` dall'edizione pubblica **come modello**, poi
+**svuotalo dei dati**: i tassi lì dentro appartengono a quel repo e a quel
+commit. Esegui la tua run e registra i **tuoi** numeri.
+
+⚠️ `eval/output/` resta **gitignorata**: i report completi pesano ~220 KB a run e
+sono riproducibili. Si versiona solo il record sintetico.
+
+---
+
+## 12-quater. Riscrittura dei meta-prompt (stile e regola 4 di Gemini)
+
+Copia **verbatim** dall'edizione pubblica:
+
+| Sorgente | Destinazione |
+|---|---|
+| `app/constants/prompts.ts` | `app/constants/prompts.ts` |
+| la funzione `buildOptimizerSystemInstruction` in `app/lib/promptOptimizer.ts` | idem |
+
+⚠️ **Se questo repo ha flussi aggiuntivi o modificati** rispetto all'edizione
+pubblica, **non sovrascrivere il file**: applica invece le tre trasformazioni
+descritte sotto, flusso per flusso. **Fermati e segnala** se non è chiaro.
+
+**Cosa cambia — contenuto normativo invariato, cambia il tono:**
+
+1. **Via minacce e maiuscolo enfatico.** `Regole TASSATIVE (pena il fallimento e
+   la regressione del prompt)` → `Regole del formato`. Eliminati
+   `ASSOLUTAMENTE VIETATO`, `Pena: fallimento generazione`, `OBBLIGATORIO`,
+   `ESCLUSIVAMENTE`. Fonte: OpenAI (*"not necessary to use all-caps or other
+   incentives like bribes or tips"*) e Anthropic (*"dial back any aggressive
+   language"*, causa **over-triggering** sui modelli recenti).
+2. **Divieti → istruzioni positive col perché.** Esempio, regola 1 di
+   `FLOW_CODE`: da *"È ASSOLUTAMENTE VIETATO formattare i file locali come link
+   Markdown. Pena: fallimento generazione"* a *"Scrivi i percorsi in backtick,
+   perché l'agente li usa come percorsi reali; un link Markdown lo porterebbe a
+   cercare una risorsa remota inesistente"*. Fonte: Anthropic — motivare
+   un'istruzione è l'unica regola del corpus **senza controindicazioni**.
+3. **Vie d'uscita dove la regola non è sempre soddisfacibile.** La regola 4 di
+   `FLOW_GEMINI` pretendeva comandi concreti anche quando l'input non dichiara
+   una toolchain: misurato **87%** di conformità, con tutti i fallimenti su
+   input senza stack. Ora chiede di scegliere la convenzione più diffusa,
+   **dichiarare l'assunzione** e dare comunque i comandi. Stessa aggiunta alla
+   regola 7 di `FLOW_CODE`.
+
+**Correzione mirata inclusa**: `FLOW_CHAT` ora chiede **esplicitamente di
+chiudere i tag** (`</role>`, `</context>`, …). Misurato: in circa **una
+generazione su quattro** Gemini li lasciava aperti, e il meta-prompt non aveva
+mai chiesto di chiuderli.
+
+**Test da aggiornare.** In `app/hooks/usePromptOptimizer.test.ts`, il test
+`passa temperature 0.5 e la regola di formattazione` asserisce
+`stringContaining('VINCOLO DI FORMATTAZIONE')`, stringa che non esiste più.
+Sostituisci quell'asserzione con:
+
+```typescript
+    // Pins the two constraints shared by every flow. Asserting the substance
+    // rather than a heading keeps the test meaningful across rewordings, while
+    // still failing if a constraint is dropped.
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.stringContaining('riga vuota le sezioni di primo livello')]),
+    );
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.stringContaining('segnaposto di anonimizzazione')]),
+    );
+```
+
+⚠️ **Questa modifica va misurata, non data per buona.** Esegui l'harness prima e
+dopo, e confronta. Se la conformità scende, `git revert` e annotalo nel registro:
+le fonti valgono per i loro modelli, non necessariamente per Gemini Flash-Lite
+attraverso un meta-prompt in italiano.
+
+---
+
 ## 13. Checklist finale
 
 - [ ] `app/lib/conformance.ts` + test copiati — 33 test verdi
@@ -379,9 +469,14 @@ feat(conformance): verificatore per formato + harness di regressione sui prompt
 - [ ] i18n: 4 chiavi → 2, in tutte e 9 le lingue
 - [ ] `ResultViewer`: import, componente, prop della coppia, 5 punti di chiamata
 - [ ] `promptLinter.ts` e il suo test rimossi, nessun riferimento residuo
+- [ ] Modalità multi-flusso disponibile (`EVAL_MULTI=1`)
+- [ ] `docs/eval-baseline.md` creato **vuoto dei dati altrui**
+- [ ] `prompts.ts` e `buildOptimizerSystemInstruction` riscritti (stile + regola 4)
+- [ ] Test del meta-prompt aggiornato alle nuove stringhe
 - [ ] Versione 1.2.0 nei tre file
 - [ ] `npm run lint && npm test && npx tsc --noEmit` puliti
 - [ ] Smoke test dell'harness eseguito
+- [ ] **Run di baseline eseguita e registrata** — prima e dopo la riscrittura
 - [ ] Commit fatto, **nessun push**
 
 ---
