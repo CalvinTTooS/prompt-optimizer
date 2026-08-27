@@ -71,6 +71,16 @@ const ONLY_FLOW = process.env.EVAL_FLOW as EvalFlow | undefined;
 const ONLY_IDS = (process.env.EVAL_ONLY ?? '').split(',').map((s) => s.trim()).filter(Boolean);
 const SLEEP_MS = Number(process.env.EVAL_SLEEP_MS ?? 13000);
 
+// Multi-flow mode (EVAL_MULTI=1) asks for ALL five formats in ONE call — what
+// production does when the user ticks several boxes — then checks only the
+// case's own variant. Paired with a default run on the same corpus it isolates
+// a single question: does generating five formats together degrade conformity
+// compared with generating them one at a time?
+//
+// The default run measures the BEST case (one format per call), so without this
+// mode the cost of batching stays invisible.
+const MULTI = process.env.EVAL_MULTI === '1';
+
 const genAI = new GoogleGenerativeAI(API_KEY);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -114,22 +124,28 @@ async function generateAndCheck(flow: EvalFlow, input: string): Promise<{ text: 
     return { text: progetto, conformance: checkScaffoldProject(progetto) };
   }
 
-  const flows: OptimizerFlows = {
-    genChat: false,
-    genCowork: false,
-    genCode: false,
-    genSystemUser: false,
-    genGemini: false,
-  };
-  flows[FLOW_FLAG[flow]] = true;
+  const flows: OptimizerFlows = MULTI
+    ? { genChat: true, genCowork: true, genCode: true, genSystemUser: true, genGemini: true }
+    : {
+        genChat: false,
+        genCowork: false,
+        genCode: false,
+        genSystemUser: false,
+        genGemini: false,
+      };
+  if (!MULTI) flows[FLOW_FLAG[flow]] = true;
+
+  // Same order production uses, so the meta-prompt is byte-identical to the one
+  // a user with all five boxes ticked would send.
+  const tasks = MULTI
+    ? (['chat', 'cowork', 'code', 'systemUser', 'gemini'] as OptFlow[]).map((f) => FLOW_INSTR[f])
+    : [FLOW_INSTR[flow]];
 
   const model = genAI.getGenerativeModel({
     model: MODEL,
     generationConfig: { responseMimeType: 'application/json', responseSchema: buildResponseSchema(flows) },
   });
-  const response = await model
-    .startChat()
-    .sendMessage([buildOptimizerSystemInstruction([FLOW_INSTR[flow]]), input]);
+  const response = await model.startChat().sendMessage([buildOptimizerSystemInstruction(tasks), input]);
   const finishReason = response.response.candidates?.[0]?.finishReason;
   const parsed = parseOptimizerResponse({ text: response.response.text(), finishReason });
 
@@ -209,7 +225,9 @@ async function main() {
   const cases = EVAL_CASES.filter(caseWanted);
   const total = cases.reduce((s, c) => s + c.flows.filter(matches).length, 0) * REPS;
 
-  console.log(`Modello: ${MODEL} · Casi: ${cases.length} · Ripetizioni: ${REPS} · Chiamate: ${total}`);
+  const mode = MULTI ? 'multi-flusso (5 formati per chiamata)' : 'flusso singolo';
+  console.log(`Modello: ${MODEL} · Modalità: ${mode}`);
+  console.log(`Casi: ${cases.length} · Ripetizioni: ${REPS} · Chiamate: ${total}`);
   console.log(`Stima: ~${Math.round((total * SLEEP_MS) / 60000)} minuti\n`);
 
   const observations: Observation[] = [];
@@ -258,7 +276,7 @@ async function main() {
   const lines: string[] = [
     '# Eval di conformità',
     '',
-    `Modello: \`${MODEL}\` · Casi: ${cases.length} · Ripetizioni: ${REPS} · Avvio: ${started.toISOString()}`,
+    `Modello: \`${MODEL}\` · Modalità: **${mode}** · Casi: ${cases.length} · Ripetizioni: ${REPS} · Avvio: ${started.toISOString()}`,
     '',
     '> I numeri servono a **falsificare** una regola, non a certificarla. Confronta il',
     '> **delta** tra due esecuzioni (prima/dopo una modifica ai meta-prompt), non il livello.',
@@ -297,9 +315,12 @@ async function main() {
 
   mkdirSync('eval/output', { recursive: true });
   const stamp = started.toISOString().replace(/[:.]/g, '-');
-  const path = `eval/output/eval-${stamp}.md`;
+  // The mode is in the filename: comparing a single-flow run against a
+  // multi-flow one is the whole point, and mixing them up would invalidate it.
+  const suffix = MULTI ? 'multi' : 'single';
+  const path = `eval/output/eval-${suffix}-${stamp}.md`;
   writeFileSync(path, lines.join('\n'));
-  writeFileSync('eval/output/latest.md', lines.join('\n'));
+  writeFileSync(`eval/output/latest-${suffix}.md`, lines.join('\n'));
   console.log(`\nReport in ${path} (e eval/output/latest.md).`);
 }
 
