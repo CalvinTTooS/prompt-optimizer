@@ -13,6 +13,11 @@ Tutte le modifiche rilevanti a Prompt Optimizer. Formato ispirato a
   l'elenco delle regole e **la prova** di ogni violazione. Verifica **solo regole
   decidibili da un parser**: quelle che richiedono giudizio non vengono valutate,
   per non produrre falsi positivi.
+- **Verifica dei segnaposto di anonimizzazione** (regola trasversale a tutti i
+  formati): controlla il vincolo universale *"non modificare mai i segnaposto"*.
+  Un segnaposto ben formato è output **corretto** e non viene mai segnalato;
+  viene segnalata la **corruzione** (`[EMAIL 1]`, `[Email_1]`), che renderebbe il
+  valore reale irrecuperabile rompendo in silenzio la promessa di privacy.
 - **Harness di regressione sui prompt** (`npm run eval`): esegue un corpus fisso
   di **66 casi** attraverso i meta-prompt reali e riporta il **tasso di conformità
   per regola**. Modello **fissato** (`gemini-3.5-flash-lite`) e **3 ripetizioni**

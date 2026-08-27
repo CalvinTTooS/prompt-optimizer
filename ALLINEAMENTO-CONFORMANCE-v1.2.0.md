@@ -61,7 +61,18 @@ LF: i file copiati dal working tree Windows arrivano con CRLF.
 ⚠️ Se la cartella sorgente non è accessibile, **fermati e segnala**: non
 riscrivere questi file a memoria.
 
-**Verifica**: `npx vitest run app/lib/conformance.test.ts` → **33 test verdi**.
+**Verifica**: `npx vitest run app/lib/conformance.test.ts` → **41 test verdi**.
+
+> **Nota sull'anonimizzazione** (regola trasversale, presente in tutti i formati):
+> il check `anon.intact` verifica il `VINCOLO UNIVERSALE` del meta-prompt — *"NON
+> modificare mai i segnaposto di anonimizzazione"*. La logica è **inversa** a
+> quella che verrebbe istintiva: un segnaposto **ben formato** (`[EMAIL_1]`,
+> `[TELEFONO_2]`, `[CARTA_1]`, `[CCV_1]`, `[MANUALE_3]`) è **output corretto** e
+> non va **mai** segnalato — il vecchio linter lo faceva, ed era un difetto.
+> Viene segnalata solo la **corruzione** (`[EMAIL 1]`, `[Email_1]`, `[EMAIL_]`),
+> che rende il valore reale irrecuperabile e rompe silenziosamente la promessa di
+> privacy. La forma generica `[EMAIL_X]` è ammessa perché la usa il meta-prompt
+> stesso, e un prompt generato può legittimamente riprenderla.
 
 ---
 

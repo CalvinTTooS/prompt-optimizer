@@ -119,6 +119,32 @@ function checkNoConcatenatedTags(text: string, tags: string[], idPrefix: string)
   return ok(`${idPrefix}.spacing`, label);
 }
 
+// --- anonymization placeholders (universal constraint) --------------------
+
+// The meta-prompt states: "VINCOLO UNIVERSALE: NON modificare mai i segnaposto
+// di anonimizzazione come [EMAIL_X], [TELEFONO_X]". Those placeholders carry the
+// user's real PII in the restore map, so a mangled one silently breaks the
+// privacy promise: the value can no longer be restored. Nothing verified this.
+//
+// Note the inverse of the usual worry: a well-formed placeholder is CORRECT and
+// must never be reported (the previous linter flagged them, which is defect ⑤
+// of the audit). Only a CORRUPTED one is a violation.
+const ANON_PREFIXES = 'EMAIL|TELEFONO|CARTA|CCV|MANUALE';
+// `_X`/`_N` are allowed because the meta-prompt itself uses that generic form,
+// and a generated prompt may legitimately echo it when restating the rule.
+const ANON_WELL_FORMED = new RegExp(`^\\[(?:${ANON_PREFIXES})_(?:\\d+|X|N)\\]$`);
+const ANON_LOOSE = new RegExp(`\\[\\s*(?:${ANON_PREFIXES})[^\\]]*\\]`, 'gi');
+
+function checkAnonymizationIntact(text: string): ConformanceCheck {
+  const label = 'Segnaposto di anonimizzazione non alterati';
+  for (const m of text.matchAll(ANON_LOOSE)) {
+    if (!ANON_WELL_FORMED.test(m[0])) {
+      return ko('anon.intact', label, m[0].slice(0, 120));
+    }
+  }
+  return ok('anon.intact', label);
+}
+
 // XML tags belonging to the other flows. Checking this closed list instead of a
 // generic `<\w+>` avoids flagging code snippets, generics or HTML samples.
 const FOREIGN_XML_TAGS = [
@@ -141,6 +167,7 @@ export function checkChat(text: string): ConformanceResult {
   return result('chat', [
     ...checkTagPairs(text, CHAT_TAGS, 'chat'),
     checkNoConcatenatedTags(text, CHAT_TAGS, 'chat'),
+    checkAnonymizationIntact(text),
   ]);
 }
 
@@ -152,6 +179,7 @@ export function checkCowork(text: string): ConformanceResult {
   return result('cowork', [
     ...checkTagPairs(text, COWORK_TAGS, 'cowork'),
     checkNoConcatenatedTags(text, COWORK_TAGS, 'cowork'),
+    checkAnonymizationIntact(text),
   ]);
 }
 
@@ -268,6 +296,8 @@ export function checkCode(text: string): ConformanceResult {
       : ok('code.noUserQuestions', 'Parla solo all\'agente, nessuna domanda all\'utente'),
   );
 
+  checks.push(checkAnonymizationIntact(text));
+
   return result('code', checks);
 }
 
@@ -292,6 +322,8 @@ export function checkSystemUser(system: string, user: string): ConformanceResult
       ? ko('sysusr.noDuplication', 'Nessun contenuto identico duplicato nei due campi', duplicated.slice(0, 120))
       : ok('sysusr.noDuplication', 'Nessun contenuto identico duplicato nei due campi'),
   );
+
+  checks.push(checkAnonymizationIntact(`${system}\n${user}`));
 
   return result('systemUser', checks);
 }
@@ -343,6 +375,8 @@ export function checkGemini(text: string): ConformanceResult {
       : ok('gemini.noUserQuestions', 'Parla solo all\'agente, nessuna domanda all\'utente'),
   );
 
+  checks.push(checkAnonymizationIntact(text));
+
   return result('gemini', checks);
 }
 
@@ -368,5 +402,6 @@ export function checkScaffoldProject(progetto: string): ConformanceResult {
     /\bGate\b/.test(progetto)
       ? ok('scaffold.gate', 'Definisce il comando di Gate')
       : ko('scaffold.gate', 'Definisce il comando di Gate', 'la parola "Gate" non compare'),
+    checkAnonymizationIntact(progetto),
   ]);
 }

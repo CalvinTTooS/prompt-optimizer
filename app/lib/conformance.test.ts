@@ -242,6 +242,69 @@ Usa TypeScript strict.`;
   });
 });
 
+// --- Anonymization placeholders (universal constraint) ---------------------
+
+describe('anonymization placeholders', () => {
+  const anon = '[EMAIL_1] [TELEFONO_2] [CARTA_1] [CCV_1] [MANUALE_3]';
+
+  const codeWith = (extra: string) =>
+    [
+      '## Contesto del progetto',
+      `Contatta ${extra} come indicato in \`CLAUDE.md\`.`,
+      '',
+      '## Piano Operativo',
+      'Piano numerato, poi FERMATI ATTENDENDO APPROVAZIONE.',
+      '',
+      '## Istruzioni operative',
+      '1. `git checkout -b feat/x`',
+      '2. Aggiorna `WORK_LOG.md` e `lessons.md`.',
+    ].join('\n');
+
+  // These are CORRECT output: they carry the user's PII in the restore map.
+  // The previous linter reported them as "segnaposto non risolti" — defect ⑤
+  // of the audit. They must never be flagged again.
+  it('never flags well-formed placeholders, in any format', () => {
+    expect(checkCode(codeWith(anon)).passed).toBe(checkCode(codeWith(anon)).total);
+    expect(
+      checkChat(`<role>Scrivi a ${anon}</role>\n\n<context>b</context>\n\n<goal>c</goal>\n\n<output_format>d</output_format>`)
+        .checks.find((c) => c.id === 'anon.intact')?.passed,
+    ).toBe(true);
+    expect(
+      checkGemini(`## Comandi\nNotifica ${anon} dopo \`pnpm test\`.`)
+        .checks.find((c) => c.id === 'anon.intact')?.passed,
+    ).toBe(true);
+    expect(
+      checkSystemUser('Sei un assistente.', `Manda la comunicazione a ${anon}`)
+        .checks.find((c) => c.id === 'anon.intact')?.passed,
+    ).toBe(true);
+  });
+
+  // The generic form appears in the meta-prompt itself ("come [EMAIL_X]"), so a
+  // generated prompt restating the rule must not be penalised.
+  it('accepts the generic [EMAIL_X] form used by the meta-prompt', () => {
+    const r = checkCode(codeWith('i segnaposto [EMAIL_X] e [TELEFONO_X]'));
+    expect(passed(r, 'anon.intact')).toBe(true);
+  });
+
+  // A mangled placeholder cannot be restored: the user's real value is lost.
+  it.each([
+    ['[EMAIL 1]', 'spazio al posto del trattino basso'],
+    ['[EMAIL-1]', 'trattino'],
+    ['[EMAIL_]', 'indice mancante'],
+    ['[Email_1]', 'maiuscole alterate'],
+    ['[TELEFONO_1 ]', 'spazio interno'],
+  ])('flags the corrupted placeholder %s (%s)', (broken) => {
+    const r = checkCode(codeWith(broken));
+    expect(passed(r, 'anon.intact')).toBe(false);
+    expect(evidence(r, 'anon.intact')).toBe(broken);
+  });
+
+  it('flags corruption in the System+User pair as a unit', () => {
+    const r = checkSystemUser('Sei un assistente.', 'Scrivi a [EMAIL 1]');
+    expect(passed(r, 'anon.intact')).toBe(false);
+  });
+});
+
 // --- Scaffold --------------------------------------------------------------
 
 describe('checkScaffoldProject', () => {
