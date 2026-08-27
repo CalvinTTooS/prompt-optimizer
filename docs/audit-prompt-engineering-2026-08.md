@@ -90,6 +90,38 @@ nei **parametri API** invece che nel testo.
 
 ---
 
+## Stato dei dieci punti — aggiornato al 2026-08-27
+
+| | Difetto | Stato |
+|---|---|---|
+| L1 | Ottimizziamo senza misurare | ✅ **chiuso** — harness, 66 casi, baseline versionata |
+| L2 | Costo del batching multi-formato | ⚠️ **riformulato** — modalità pronta, run da fare |
+| L3 | Stile enfatico | ✅ **chiuso** — esito opposto al previsto |
+| L4 | Input non delimitato + `systemInstruction` nativo | ❌ aperto |
+| L5 | Due dialetti di segnaposto | ⚠️ metà — falso warning rimosso, disallineamento resta |
+| L6 | Scheda CoT in-app superata | ❌ aperto |
+| L7 | Linter che contraddice i flussi | ✅ **chiuso** |
+| L8 | Few-shot duplicato e incondizionato | ❌ aperto |
+| L9 | `temperature: 0.5` su Gemini 3.x | ❌ aperto — **priorità salita** |
+| L10 | "Spiegazione" non verificabile | ❌ aperto |
+
+**Perché L9 è ora prioritario**: non è più solo una raccomandazione di Google, è
+un **problema di validità della misura**. L'harness gira **senza** `temperature`,
+la produzione la impone a **0.5**: le baseline misurano una configurazione
+diversa da quella spedita. Si sana in un modo dei due — o l'harness rispecchia la
+produzione, o la produzione smette di imporla (che è la raccomandazione Google per
+la famiglia 3.x, e renderebbe le baseline corrette retroattivamente).
+
+**Emersi durante il lavoro, non presenti in questo audit:**
+- ✅ Il `VINCOLO UNIVERSALE` sui segnaposto di anonimizzazione **non era
+  verificato da nessuno**. Ora c'è `anon.intact`: 100% su tutti i formati.
+- ✅ La copia del `systemInstruction` nell'harness **era già divergente** e
+  misurava un prompt mai spedito. Ora è una funzione sola.
+- ⚠️ `gemini.concreteCommands` al 70%: sospetto difetto **del check**, che
+  pretende comandi di build anche quando l'utente ha chiesto sole regole di stile.
+
+---
+
 ## Parte 3 — Errori di logica, in ordine di gravità
 
 ### 🔴 L1 — Ottimizziamo senza misurare (l'errore di fondo)
@@ -116,6 +148,30 @@ misura non abbiamo modo di accorgercene.
 
 ### 🔴 L2 — Istruzioni contraddittorie nella stessa chiamata
 
+> ## ⚠️ RIFORMULATO il 2026-08-27 — la citazione qui sotto era applicata male
+>
+> Avevo citato Google (*"Choose one format and use it consistently within a
+> single prompt"*) come prova di una contraddizione. **Quella regola parla di
+> come strutturi il TUO prompt** — non mescolare tag XML e heading Markdown come
+> impalcatura — **non dei formati che chiedi in output.** Le nostre istruzioni
+> per-flusso non si contraddicono: sono *scopate* dalle intestazioni
+> `=== FLUSSO N ===`.
+>
+> **Il problema reale che resta** è la **pressione sui token** → troncamento,
+> documentato dal nostro stesso `TruncatedResponseError`, il cui messaggio
+> suggerisce all'utente di *"selezionare meno formati"*: scarichiamo su di lui un
+> limite nostro. Aggravato da L8 (esempi few-shot duplicati per ogni flusso).
+>
+> **Raggio d'azione più piccolo del previsto**: il default dell'app è
+> `genChat: true` e tutti gli altri `false`, quindi il percorso più battuto è
+> **già a flusso singolo**.
+>
+> **Da misurare, non da dedurre**: `EVAL_MULTI=1 npm run eval` genera i cinque
+> formati in una chiamata e confronta la conformità con la run a flusso singolo.
+> Tre esiti possibili, tutti utili — uguale (L2 si chiude), peggiore (lo split è
+> giustificato, e sappiamo di quanto), migliore (L2 andava capovolto).
+
+
 **Il difetto**: una sola richiesta a Gemini contiene fino a **5 specifiche di formato
 divergenti**. Nella stessa `systemInstruction` convivono letteralmente:
 
@@ -136,6 +192,33 @@ cioè una chiamata per formato — che eliminerebbe insieme contraddizione e tro
 ---
 
 ### 🟠 L3 — Il nostro stile di meta-prompt è un anti-pattern ritrattato
+
+> ## ✅ CHIUSO il 2026-08-27 — con esito diverso da quello previsto
+>
+> Misurato su 4 run (vedi [`eval-baseline.md`](eval-baseline.md)). La diagnosi
+> qui sotto era **giusta a metà**, e la parte sbagliata è istruttiva:
+>
+> - **«Sii esplicito» → confermato in pieno.** `chat.balanced` **76% → 98%**
+>   perché il meta-prompt ha finalmente *detto* di chiudere i tag;
+>   `gemini.headings` recuperato a 100% perché ha finalmente detto *"senza tag
+>   XML"*. Entrambe le regole erano **implicite**, e l'enfasi le stava
+>   compensando.
+> - **«Togli l'enfasi» → smentito, se preso da solo.** `code.claudeMd`
+>   **93% → 57%** togliendo le maiuscole a parità di posizione. Il maiuscolo non
+>   stava facendo *intensità*: stava facendo **salienza**, su un'istruzione
+>   sepolta in coda a una regola lunga.
+> - **La cura giusta è strutturale, non tipografica.** Dando all'istruzione una
+>   **regola numerata propria**: **57% → 100%**, meglio dell'originale enfatico,
+>   senza una sola maiuscola.
+>
+> **Regola operativa che ne esce**: *un requisito che merita enfasi merita una
+> regola propria.* E, prima ancora: *se una regola ha bisogno del maiuscolo per
+> reggere, di solito è perché non dice tutto quello che serve.*
+>
+> **Attenzione — tre assi, non uno** (errore commesso e corretto in corso d'opera):
+> il **modo imperativo** resta raccomandato, l'**intensità** va tolta, la
+> **portata** (*sempre*, *ogni*, *ciascun*) va **rafforzata**, non ridotta.
+
 
 **Il difetto**: `prompts.ts` contiene **4 "TASSATIVE"**, **3 "VIETATO"**, **3
 "OBBLIGATORIO"**, *"pena il fallimento e la regressione del prompt"*, *"Pena: fallimento

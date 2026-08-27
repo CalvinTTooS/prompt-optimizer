@@ -408,6 +408,29 @@ Copia **verbatim** dall'edizione pubblica:
 pubblica, **non sovrascrivere il file**: applica invece le tre trasformazioni
 descritte sotto, flusso per flusso. **Fermati e segnala** se non è chiaro.
 
+> ⚠️ **Distinzione critica: tre assi, e solo uno va ridotto.** È l'errore più
+> facile da commettere replicando questa modifica — l'ho commesso io stesso, e
+> l'ha intercettato l'utente.
+>
+> | Asse | Esempio | Direzione |
+> |---|---|---|
+> | **Modo** imperativo | *"Scrivi X"* vs *"Potresti scrivere X?"* | ✅ **invariato**, resta imperativo |
+> | **Intensità** | `ASSOLUTAMENTE VIETATO`, `pena il fallimento`, maiuscolo | ⬇️ **azzerare** |
+> | **Portata** | *sempre*, *ogni*, *ciascun*, *tutti* | ⬆️ **rafforzare**, non ridurre |
+>
+> L'imperativo **non** è stato ritrattato: Anthropic lo raccomanda tuttora —
+> *"If you say 'can you suggest some changes,' Claude will sometimes provide
+> suggestions rather than implementing them"*. E la portata va resa **più**
+> esplicita, non meno: i modelli recenti *"do not silently generalize an
+> instruction from one item to another"* (esempio ufficiale: *"Apply this
+> formatting to every section, **not just the first one**"*).
+>
+> In italiano i due assi si esprimono con parole simili — `SEMPRE` urlato e
+> `sempre` quantificatore — ma fanno lavori opposti. **Verifica dopo la
+> riscrittura**: i marcatori di intensità devono essere a **zero**, i
+> quantificatori di portata devono essere **ancora presenti** (nel repo pubblico:
+> 14 occorrenze fra *sempre*, *ogni*, *ciascun*, *tutti*).
+
 **Cosa cambia — contenuto normativo invariato, cambia il tono:**
 
 1. **Via minacce e maiuscolo enfatico.** `Regole TASSATIVE (pena il fallimento e
@@ -429,10 +452,42 @@ descritte sotto, flusso per flusso. **Fermati e segnala** se non è chiaro.
    **dichiarare l'assunzione** e dare comunque i comandi. Stessa aggiunta alla
    regola 7 di `FLOW_CODE`.
 
-**Correzione mirata inclusa**: `FLOW_CHAT` ora chiede **esplicitamente di
-chiudere i tag** (`</role>`, `</context>`, …). Misurato: in circa **una
-generazione su quattro** Gemini li lasciava aperti, e il meta-prompt non aveva
-mai chiesto di chiuderli.
+**Due correzioni mirate incluse**, entrambe della stessa natura — una regola che
+davamo per implicita:
+- `FLOW_CHAT` ora chiede **esplicitamente di chiudere i tag** (`</role>`,
+  `</context>`, …). Misurato: in circa **una generazione su quattro** Gemini li
+  lasciava aperti.
+- `FLOW_GEMINI` ora dice **esplicitamente "senza tag XML"** (prima diceva solo
+  *"Markdown puro"*, cioè *cosa usare* e mai *cosa escludere*). Senza quella
+  frase l'output degenerava in formato Chat, con `<role>`/`<context>` al posto
+  degli heading.
+
+> ### ⭐ La lezione più importante di questa modifica (misurata, non teorica)
+>
+> **Un requisito che merita enfasi merita una regola propria.**
+>
+> Togliendo il maiuscolo da `È VIETATO MODIFICARE 'CLAUDE.md', ma è OBBLIGATORIO
+> LEGGERLO`, la conformità è **crollata dal 93% al 57%**. Il maiuscolo non stava
+> facendo *intensità*: stava facendo **salienza**, perché l'istruzione era
+> sepolta in coda a una regola lunga.
+>
+> La cura **non** è rimettere le maiuscole. È **scorporare l'istruzione in una
+> regola numerata propria**: così è risalita al **100%** — meglio dell'originale
+> enfatico, senza una sola maiuscola.
+>
+> **Applica lo stesso criterio replicando**: se in questo repo una regola porta
+> in coda un requisito importante, scorporalo invece di limitarti ad
+> ammorbidirne il tono. Altrimenti riproduci il crollo, non il miglioramento.
+
+**Risultati misurati nel repo pubblico** (4 run, stesso corpus e modello):
+
+| Metrica | Baseline enfatica | Solo de-enfasi | + salienza strutturale |
+|---|---|---|---|
+| `chat.balanced` | 76% | **98%** | 98% |
+| `code.claudeMd` | 93% | **57%** 🔴 | **100%** ✅ |
+| `gemini.headings` | 100% | 92% 🔴 | **100%** ✅ |
+| `gemini.noGenericPhrases` | 100% | 96% 🔴 | **100%** ✅ |
+| `gemini.concreteCommands` | 87% | 65% | 70% ⚠️ ancora aperto |
 
 **Test da aggiornare.** In `app/hooks/usePromptOptimizer.test.ts`, il test
 `passa temperature 0.5 e la regola di formattazione` asserisce
@@ -455,6 +510,19 @@ Sostituisci quell'asserzione con:
 dopo, e confronta. Se la conformità scende, `git revert` e annotalo nel registro:
 le fonti valgono per i loro modelli, non necessariamente per Gemini Flash-Lite
 attraverso un meta-prompt in italiano.
+
+**Se durante una run cade la rete**: l'harness cattura l'errore, lo registra fra
+le chiamate fallite e prosegue — non serve rilanciare tutto. Conta però le
+osservazioni per flusso prima di confrontare: un blocco contiguo di fallimenti
+può azzerare un intero flusso e rendere quel confronto privo di significato.
+Rilancia il solo flusso colpito:
+
+```bash
+EVAL_FLOW=gemini npm run eval    # 10 casi × 3 = 30 chiamate, ~7 minuti
+```
+
+È già successo (2026-08-27: 51 chiamate perse in blocco, il flusso `gemini`
+ridotto a 3 osservazioni su 30).
 
 ---
 

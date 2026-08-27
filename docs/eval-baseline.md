@@ -72,6 +72,67 @@ Quel singolo dato era **rumore**.
 
 ---
 
+## Run 2-4 — 2026-08-27 · esperimento L3 (stile dei meta-prompt)
+
+Tre run in sequenza sullo stesso corpus e modello, per misurare la riscrittura
+dei meta-prompt (audit L3 + regola 4 di `FLOW_GEMINI`).
+
+| Metrica | Run 1 — baseline enfatica | Run 2 — de-enfasi | Run 3-4 — + salienza strutturale |
+|---|---|---|---|
+| `chat.balanced` | 32/42 · 76% | **41/42 · 98%** | 98% |
+| `code.claudeMd` | 28/30 · 93% | 17/30 · **57%** | **30/30 · 100%** |
+| `code.noPlaceholders` | 30/30 · 100% | 29/30 · 97% | **30/30 · 100%** |
+| `gemini.headings` | 30/30 · 100% | 24/26 · 92% | **30/30 · 100%** |
+| `gemini.noGenericPhrases` | 30/30 · 100% | 25/26 · 96% | **30/30 · 100%** |
+| `gemini.concreteCommands` | 26/30 · 87% | 17/26 · 65% | 21/30 · **70%** ⚠️ |
+
+Commit: `1c1f161` (riscrittura) · `e9df410` (ripristino portata) · run finali dopo
+lo scorporo di `code.claudeMd` e `gemini.headings` in regole numerate proprie.
+
+### Tre conclusioni, tutte misurate
+
+**① L'enfasi non aggiungeva forza: compensava omissioni.**
+`chat.balanced` è salito di 22 punti perché il meta-prompt ha finalmente **detto**
+di chiudere i tag — cosa che non aveva mai chiesto, dandola per implicita.
+`gemini.headings` è tornato a 100% perché ha finalmente detto **"senza tag XML"**:
+prima diceva solo *cosa usare*, mai *cosa escludere*. Togliere il maiuscolo non
+ha rotto niente: ha reso **visibile ciò che mancava da sempre**.
+
+**② La salienza strutturale batte quella tipografica.**
+`code.claudeMd`: 93% con `È VIETATO / OBBLIGATORIO` in coda a una regola lunga →
+**57%** togliendo le maiuscole a parità di posizione → **100%** dando
+all'istruzione una **regola numerata propria**, senza una sola maiuscola.
+Regola operativa che ne discende: *un requisito che merita enfasi merita una
+regola propria*.
+
+**③ Una previsione falsificabile ha fatto il suo lavoro.**
+Prima della run 4 avevo scritto: *"se `headings` torna a 100% ma
+`concreteCommands` resta basso, la diagnosi «degrado a cascata» è sbagliata e i
+due problemi sono indipendenti"*. È andata così. Sono **due problemi distinti**,
+e ora è un fatto, non una supposizione.
+
+### Aperto: `gemini.concreteCommands` a 70%
+
+Sotto la baseline di 17 punti. `gemini-non-rompere-test` fallisce **3 volte su 3**,
+e il suo input è *"un file di regole per l'AI… per evitare che rompa i test"* —
+nessuna toolchain, e nessuna richiesta di comandi.
+
+**Ipotesi da verificare: a sbagliare è il check, non l'output.** Se l'utente chiede
+regole di stile, un file senza comandi di build è **corretto**. Il check dovrebbe
+pretendere comandi concreti solo quando il file dichiara una sezione di comandi.
+Sarebbe la seconda volta che l'harness smaschera un difetto del verificatore
+invece che del prodotto (la prima: `code.noPlaceholders`, 2026-08-27).
+
+### Nota sulle chiamate perse
+
+La run 2 ha perso **51 chiamate in blocco** per una caduta di rete (casi 127-177),
+azzerando di fatto il flusso `gemini` (3 osservazioni su 30). I flussi `chat`,
+`code`, `cowork` e `scaffold` erano integri, quindi il confronto principale ha
+retto. Lezione: **contare le osservazioni per flusso prima di confrontare**, e
+rilanciare il solo flusso colpito con `EVAL_FLOW=<flusso>`.
+
+---
+
 ## Come registrare una run futura
 
 1. `npm run eval` (oppure `EVAL_MULTI=1 npm run eval` per la modalità multi-flusso)
