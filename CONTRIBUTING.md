@@ -36,41 +36,12 @@ npm run lint && npm test
 - Logica pura (testata) → `app/lib/`
 - `app/page.tsx` resta **solo orchestrazione** (compone hook e componenti).
 
-## Documentare le funzioni
-
-- **Commento `/** ... */` in inglese** su ogni funzione esportata di
-  `app/lib/` e `app/hooks/` il cui contratto non sia ovvio dal nome/firma
-  (esempio: `runAnonymization` in `app/lib/anonymization.ts`). Descrivi il
-  **comportamento/contratto** (input non ovvi, effetti, casi limite), non una
-  parafrasi del codice.
-- **Funzioni interne (non esportate)**: un commento solo se l'algoritmo stesso
-  non è ovvio (esempio: `passesLuhnCheck` — una riga che spiega *perché*
-  quell'operazione, non *cosa* fa riga per riga).
-- **Niente commenti sull'ovvio**: se toglierlo non farebbe sbagliare chi legge
-  o modifica la funzione, il commento non va scritto.
-- **Aggiorna o elimina i commenti insieme al codice che descrivono**: un
-  commento disallineato dalla funzione è peggio di nessun commento.
-- **Lingua**: identificatori e commenti in inglese (le stringhe rivolte
-  all'utente restano in italiano) — coerenza con `docs/METHOD.md` §2.
-
 ## Convenzioni
 
-- **Branch**: questo repo lavora **su `main`**, senza branch di feature (uso
-  solista — vedi `docs/METHOD.md` §6/§10, che resta la regola di default per
-  progetti con più contributor).
-- **Commit**: [Conventional Commits](https://www.conventionalcommits.org/),
-  messaggio in italiano: `tipo(scope): descrizione`.
-  - **Tipi**: `feat` (nuova funzionalità), `fix` (correzione), `refactor`
-    (ristrutturazione senza cambio di comportamento), `docs` (documentazione),
-    `chore` (manutenzione/release), `test`.
-  - **Scope**: il modulo o l'area toccata — nome di cartella/feature (es.
-    `prompts`, `eval`, `tips`, `scaffold`, `conformance`, `readme`, `release`),
-    non il nome del file.
-  - **Atomici e a gate verde**: un commit = un cambiamento coeso; commit solo
-    dopo `npm run lint && npm test` verde (→ [Gate](#gate-definition-of-done)).
-  - Esempi reali dalla storia del repo: `feat(eval): secondo backend - claude
-    CLI - per una lettura cross-modello`, `fix(prompts): esempi iniettati una
-    volta sola (L8) e nessuna temperature (L9)`.
+- **Branch**: lavora sempre su un branch dedicato; niente commit diretti su
+  `master`.
+- **Commit**: stile Conventional Commits (`feat(...)`, `fix(...)`,
+  `chore(...)`, `docs(...)`, `test(...)`).
 - **Versioning**: al finishing di ogni feature, bump SemVer tenendo allineati
   `package.json` e `src-tauri/Cargo.toml` (poi `cargo check` per sincronizzare
   `Cargo.lock`).
