@@ -63,6 +63,54 @@ describe('useApiKeyConfig', () => {
     expect(result.current.selectedModel).toBe('gemini-1.5-flash-latest');
   });
 
+  // The default is the Flash-Lite alias: cheapest tier, and moving, so the app
+  // follows Google's current model without a code change. Pinning it here means
+  // a future reshuffle of the preference chain has to be deliberate.
+  test('preferisce Flash-Lite come modello di default quando è disponibile', async () => {
+    getStoredApiKey.mockResolvedValue('sk-existing');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          models: [
+            { name: 'models/gemini-3.5-pro', displayName: 'Pro', supportedGenerationMethods: ['generateContent'] },
+            { name: 'models/gemini-flash-latest', displayName: 'Flash', supportedGenerationMethods: ['generateContent'] },
+            { name: 'models/gemini-flash-lite-latest', displayName: 'Flash Lite', supportedGenerationMethods: ['generateContent'] },
+          ],
+        }),
+      }),
+    );
+
+    const { result } = renderHook(() => useApiKeyConfig());
+    await waitFor(() => expect(result.current.modelsStatus).toBe('loaded'));
+
+    expect(result.current.selectedModel).toBe('gemini-flash-lite-latest');
+  });
+
+  // Google has renamed model families before, so the chain must degrade instead
+  // of falling through to whatever happens to be first in the list.
+  test('ripiega su un Flash-Lite versionato se manca l\'alias', async () => {
+    getStoredApiKey.mockResolvedValue('sk-existing');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          models: [
+            { name: 'models/gemini-3.5-pro', displayName: 'Pro', supportedGenerationMethods: ['generateContent'] },
+            { name: 'models/gemini-3.5-flash-lite', displayName: 'Flash Lite 3.5', supportedGenerationMethods: ['generateContent'] },
+          ],
+        }),
+      }),
+    );
+
+    const { result } = renderHook(() => useApiKeyConfig());
+    await waitFor(() => expect(result.current.modelsStatus).toBe('loaded'));
+
+    expect(result.current.selectedModel).toBe('gemini-3.5-flash-lite');
+  });
+
   test('stays unconfigured when no key was ever stored', async () => {
     const { result } = renderHook(() => useApiKeyConfig());
 

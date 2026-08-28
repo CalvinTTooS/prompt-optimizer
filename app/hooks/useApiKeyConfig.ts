@@ -73,8 +73,16 @@ export function useApiKeyConfig() {
         setModels(formattedModels);
 
         if (formattedModels.length > 0) {
+          // Default: the current Flash-Lite alias — cheapest and fastest tier,
+          // and a MOVING alias so the app follows Google's current model
+          // without a code change. (The eval harness pins an exact version
+          // instead: there comparability across runs matters more than being
+          // current.) The chain degrades gracefully because the list is fetched
+          // live and its naming has changed before.
           const defaultM =
-            formattedModels.find((m) => m.id === 'gemini-1.5-flash-latest') ||
+            formattedModels.find((m) => m.id === 'gemini-flash-lite-latest') ||
+            formattedModels.find((m) => m.id.includes('flash-lite') && m.id.includes('latest')) ||
+            formattedModels.find((m) => m.id.includes('flash-lite')) ||
             formattedModels.find((m) => m.id.includes('flash-latest')) ||
             formattedModels.find((m) => m.id.includes('flash')) ||
             formattedModels[0];
