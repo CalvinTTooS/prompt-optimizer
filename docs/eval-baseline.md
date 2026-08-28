@@ -133,6 +133,89 @@ rilanciare il solo flusso colpito con `EVAL_FLOW=<flusso>`.
 
 ---
 
+## Run 8 — 2026-08-28 · sonda cross-modello (backend Claude)
+
+Prima esecuzione con `EVAL_BACKEND=claude`: **stesso meta-prompt, stesso corpus,
+stesso checker**, cambia solo chi genera. Serve a distinguere una domanda che un
+modello solo non può risolvere: quando una regola va male, **è la regola o è il
+modello?**
+
+| | |
+|---|---|
+| Commit | `f3fb7b5` |
+| Backend | `claude` CLI, modello `sonnet` |
+| Ambito | solo flusso `gemini` · 10 casi · K=3 · 30 chiamate |
+| Costo | ~$0,09 a chiamata (il CLI porta ~20k token di contesto di sistema a ogni invocazione) |
+
+### ⚠️ Bias di selezione — perché i tassi grezzi NON sono confrontabili
+
+Claude ha prodotto **7 risposte su 30 fuori dal contratto JSON**, e non a caso:
+si concentrano sui **casi più ostici**, gli stessi che su Gemini falliscono.
+
+| Caso scartato | Ripetizioni perse | Fallisce anche su Gemini? |
+|---|---|---|
+| `gemini-non-rompere-test` | 3 su 3 | sì |
+| `gemini-commit-docs` | 3 su 3 | sì |
+| `gemini-web-generico` | 1 su 3 | sì |
+
+Confrontare il 91% grezzo di Claude col 70% di Gemini sarebbe **scorretto**: il
+primo è calcolato su un corpus da cui i casi difficili sono spariti in silenzio.
+
+### Confronto valido, sui soli casi risposti da entrambi
+
+| Caso | Gemini | Claude |
+|---|---|---|
+| `gemini-cloud-native` | 3/3 | 3/3 |
+| `gemini-migrazioni-db` | 3/3 | 2/3 |
+| `gemini-monorepo-gerarchico` | 2/3 | 2/3 |
+| `gemini-monorepo-node` | 3/3 | 3/3 |
+| `gemini-python-uv` | 2/3 | 3/3 |
+| `gemini-rust-crate` | 2/3 | 3/3 |
+| `gemini-typescript-pulito` | 2/3 | 3/3 |
+| `gemini-web-generico` | 2/3 | 2/2 |
+| **`gemini.concreteCommands`** | **19/24 · 79%** | **21/23 · 91%** |
+
+Non 70% contro 91%: **79% contro 91%**. Divario reale **12 punti**, non 21.
+
+### Conclusione: la regola è il problema, non il modello
+
+I due casi peggiori — `gemini-non-rompere-test` e `gemini-commit-docs` — su Claude
+**non sono nemmeno arrivati in JSON valido, 3 volte su 3**. Sono gli input che
+chiedono *"un file di regole per l'AI"* e *"linee guida per documentare e gestire
+i commit"*: **nessuno dei due chiede comandi di build**.
+
+Che Claude, proprio lì, esca dal contratto invece di sbagliare la regola è **esso
+stesso un dato**: quando l'input non contiene ciò che il prompt pretende, il
+modello non sbaglia — **abbandona il compito**. Due modelli lo manifestano in due
+modi (Gemini omette i comandi, Claude rompe il formato) ma la causa è la stessa:
+**stiamo chiedendo qualcosa che l'input non consente**.
+
+**Azione**: il fix va nel **check** (pretendere comandi concreti solo se il file
+dichiara una sezione di comandi), non nel meta-prompt. È però una modifica allo
+**strumento di misura**: va registrata come **invalidante per questa metrica**, e
+la baseline di `gemini.concreteCommands` andrà ripresa da zero dopo il cambio.
+
+### Reperto collaterale: quanto vale l'output strutturato
+
+**7 risposte su 30 (23%)** di Claude non hanno rispettato il contratto JSON,
+richiesto a parole. Con Gemini quel numero è **zero per costruzione**, perché lo
+schema è imposto dall'API (`responseSchema`).
+
+L'audit elencava l'output strutturato tra i punti in cui siamo *già aderenti*
+alle best practice, citando Google. Ora ha un numero: **ci risparmia circa un
+fallimento su quattro**.
+
+### Nota d'uso del backend Claude
+
+Il confronto resta **indicativo, non controllato**: senza `responseSchema` la
+forma JSON è solo richiesta, e il CLI eredita l'output-style globale dell'utente.
+I fallimenti di contratto sono contati a parte (`JsonContractError`) proprio per
+non farli passare per violazioni di regola — ma, come mostrato sopra, **vanno
+comunque esaminati**: la loro distribuzione può invalidare il confronto anche
+restando fuori dai tassi.
+
+---
+
 ## Come registrare una run futura
 
 1. `npm run eval` (oppure `EVAL_MULTI=1 npm run eval` per la modalità multi-flusso)
@@ -142,3 +225,11 @@ rilanciare il solo flusso colpito con `EVAL_FLOW=<flusso>`.
    di dichiararle reperti: un tasso basso può essere un difetto del checker, non
    del meta-prompt. È già successo (falso positivo su `code.noPlaceholders`,
    corretto il 2026-08-27).
+5. **Controllare COME si distribuiscono le osservazioni mancanti**, non solo
+   quante sono. Chiamate fallite, troncamenti e risposte fuori contratto non sono
+   rumore uniforme: se si concentrano sui casi difficili, il tasso che resta è
+   **gonfiato** e il confronto è invalido anche se i numeri sembrano sani. È già
+   successo due volte: 51 chiamate perse in blocco su un solo flusso
+   (2026-08-27) e 7 risposte fuori contratto tutte sui casi ostici (2026-08-28).
+   Quando succede, ricalcolare **sul sottoinsieme comune** invece di confrontare
+   i totali.

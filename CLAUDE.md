@@ -122,7 +122,10 @@ consultare `node_modules/next/dist/docs/` prima di scrivere codice Next.js.
 - Config Tauri: `src-tauri/tauri.conf.json` · `src-tauri/capabilities/default.json`.
 - Documentazione: `docs/METHOD.md` (metodologia) ·
   `docs/prompt-engineering-best-practices.md` (ricerca best practice prompt
-  engineering, per casistica) · `handover.md` (stato/roadmap storica).
+  engineering, per casistica) · `docs/TESTING.md` (regole concrete per non
+  rompere la suite Vitest esistente — leggerlo prima di toccare `app/lib/`,
+  `app/hooks/` o `app/constants/scaffoldTemplate.ts`) · `handover.md`
+  (stato/roadmap storica).
 - Percorsi **rigidi**: usare sempre questi, non variarli. Costanti/prompt di
   sistema in `app/constants/`, componenti JSX in `app/components/`, stato/logica
   in `app/hooks/` — `page.tsx` resta solo orchestrazione (vedi sopra).
@@ -144,7 +147,8 @@ consultare `node_modules/next/dist/docs/` prima di scrivere codice Next.js.
   l'**uscita** prima di dichiarare "ho finito"*: `npm run lint && npm test`
   (nota: `npm run lint` oggi segnala anche errori preesistenti su codice non
   ancora rifattorizzato in `page.tsx` — non bloccanti per un passo che non
-  tocca quelle righe, ma da ripulire quando si rifattorizza quel file).
+  tocca quelle righe, ma da ripulire quando si rifattorizza quel file). Regole
+  per evitare regressioni nella suite: `docs/TESTING.md`.
 
 ## Profilo di piattaforma — Profilo A (Desktop / portable)
 - **Distribuzione**: Tauri bundler produce sia eseguibile standalone sia
