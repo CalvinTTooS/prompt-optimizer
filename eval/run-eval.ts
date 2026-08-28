@@ -101,6 +101,9 @@ const CLAUDE_MODEL = process.env.EVAL_CLAUDE_MODEL ?? 'sonnet';
 
 class JsonContractError extends Error {}
 
+/** Rolling checkpoint of the observations collected so far (see the loop). */
+const PARTIAL_PATH = 'eval/output/_partial.json';
+
 /**
  * Spells out the JSON shape that `responseSchema` enforces on the Gemini path.
  * Derived from the same flags, so the two backends stay in sync by construction.
@@ -353,6 +356,8 @@ async function main() {
   console.log(`Casi: ${cases.length} · Ripetizioni: ${REPS} · Chiamate: ${total}`);
   console.log(`Stima: ~${Math.round((total * SLEEP_MS) / 60000)} minuti\n`);
 
+  mkdirSync('eval/output', { recursive: true });
+
   const observations: Observation[] = [];
   const errors: string[] = [];
   const jsonFailures: string[] = [];
@@ -377,6 +382,11 @@ async function main() {
           const { text, conformance } = await generateAndCheck(flow, c.input);
           observations.push({ caseId: c.id, flow, rep, text, conformance });
           consecutiveQuotaErrors = 0;
+          // Checkpoint after every observation. The markdown report is written
+          // only at the end, so an interrupted run used to leave nothing behind
+          // — three runs were lost that way, one of them at 108/198 after forty
+          // minutes of clean calls. This file makes a killed run recoverable.
+          writeFileSync(PARTIAL_PATH, JSON.stringify(observations));
           const failed = conformance.total - conformance.passed;
           process.stdout.write(failed === 0 ? 'ok\n' : `${conformance.passed}/${conformance.total}\n`);
         } catch (e) {
