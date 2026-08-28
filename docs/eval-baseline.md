@@ -133,6 +133,79 @@ rilanciare il solo flusso colpito con `EVAL_FLOW=<flusso>`.
 
 ---
 
+## Run 12 — 2026-08-28 · ⭐ baseline di riferimento (la prima pienamente valida)
+
+**È la prima run in cui produzione e harness usano la stessa identica
+configurazione.** Fino a L9 la produzione imponeva `temperature: 0.5` mentre
+l'harness non la impostava: ogni numero precedente descriveva un sistema
+leggermente diverso da quello spedito, e portava un asterisco. Da qui in poi no.
+
+| | |
+|---|---|
+| Commit | `80d09e1` |
+| Modello | `gemini-3.5-flash-lite` (fissato) |
+| Modalità | flusso singolo · eseguita **a blocchi**, un flusso per volta |
+| Corpus | 66 casi · K=3 · **198 osservazioni** · 960 controlli · **0 errori** |
+| Esito | **949/960 superati (98,9%)** — baseline iniziale: 98,3% |
+
+### Tassi per regola
+
+| Flusso | Regola | Conformi | % |
+|---|---|---|---|
+| chat | tutte e 4 (incl. `chat.balanced`) | 42/42 | **100%** |
+| code | tutte e 10 | 30/30 | **100%** |
+| cowork | tutte e 4 | 24/24 | **100%** |
+| systemUser | tutte e 3 | 54/54 | **100%** |
+| gemini | `noSelfReference` · `headings` · `noUserQuestions` · `anon.intact` | 30/30 | 100% |
+| gemini | `noGenericPhrases` | 29/30 | 97% |
+| gemini | **`concreteCommands`** | 20/30 | **67%** ⚠ |
+| scaffold | tutte e 3 | 18/18 | **100%** |
+
+**28 combinazioni regola×flusso su 30 sono al 100%.**
+
+### Confronto con lo stato precedente
+
+| Metrica | Prima | Ora | |
+|---|---|---|---|
+| `chat.balanced` | 41/42 · 98% | **42/42 · 100%** | ⬆ |
+| `code` — tutte e 10 | 100% | **100%** | = |
+| `gemini.headings` | 100% | **100%** | = |
+| `gemini.noGenericPhrases` | 100% | 29/30 · 97% | −1 oss. |
+| `gemini.concreteCommands` | 21/30 · 70% | 20/30 · 67% | −1 oss. |
+
+### Conclusione: L9 è confermato
+
+**Rimuovere `temperature` non ha avuto effetti collaterali.** Le due variazioni
+sono di **una singola osservazione su 30** — rumore, non segnale. Tutto il resto
+ha tenuto, e `chat.balanced` è arrivato al 100%.
+
+La raccomandazione di Google per la famiglia Gemini 3.x (*"we strongly recommend
+keeping them at their default values"*) **vale anche sul nostro caso**, e in più
+allinea la misura al sistema reale. Nessun motivo di tornare indietro.
+
+### L'unica metrica ancora aperta
+
+`gemini.concreteCommands` resta al **67%**, stabile fra le run (70% → 67%,
+differenza di una osservazione). La sonda cross-modello ha già indicato che il
+problema è **la regola, non il modello**: pretende comandi di build anche su
+input che chiedono sole regole di stile.
+
+**Prossimo passo**: rendere il check condizionale — comandi concreti richiesti
+solo se il file dichiara una sezione di comandi. È una modifica allo **strumento
+di misura**, quindi la baseline di questa metrica andrà ripresa da zero dopo il
+cambio; tutte le altre restano valide.
+
+### Nota operativa: eseguire a blocchi
+
+Questa run è stata lanciata **un flusso per volta** (`EVAL_FLOW=<flusso>` in
+sequenza) dopo che tre run intere erano andate perse: due per la sospensione
+automatica del computer, che disattiva la scheda di rete. Ogni blocco dura 4-12
+minuti e **scrive il proprio report appena finisce**, quindi un'interruzione
+costa al massimo il segmento in corso. Stesso consumo di quota, molta più
+robustezza. **È il modo raccomandato di eseguire una run completa.**
+
+---
+
 ## Come registrare una run futura
 
 1. `npm run eval` (oppure `EVAL_MULTI=1 npm run eval` per la modalità multi-flusso)
