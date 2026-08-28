@@ -1,94 +1,122 @@
-# Istruzioni di allineamento — verificatore di conformità (v1.2.0)
+# Allineamento del fork alla v1.2.0 — guida passo passo
 
-> **Per l'agente**: questo documento descrive **esattamente** le modifiche già
-> applicate nell'edizione pubblica `prompt-optimizer`. Devi **replicarle alla
-> lettera** in questo repo. **Non improvvisare, non aggiungere migliorie, non
-> riformulare i testi**: ogni blocco va inserito **verbatim**.
+> **Per l'agente.** Questa guida porta un fork dalla **v1.1.0** alla **v1.2.0**
+> producendo **codice identico** a quello dell'edizione pubblica. È organizzata
+> per **massimizzare le copie e gli script** e **ridurre al minimo l'editing a
+> mano**: ogni modifica fatta a mano è un'occasione di divergenza.
 >
 > **Regola d'oro**: se un passo non corrisponde a ciò che trovi nel repo,
-> **fermati e segnala** invece di adattare a modo tuo.
+> **fermati e segnala**. Non adattare, non improvvisare, non riscrivere a
+> memoria.
+>
+> Il pacchetto contiene:
+> ```
+> LEGGIMI-ALLINEAMENTO-v1.2.0.md   ← questo file
+> file-da-copiare/                 ← file da copiare tali e quali
+> script/                          ← script che applicano le modifiche meccaniche
+> ```
 
 ---
 
-## 0. Contesto e stato di partenza
+## 0. Che cosa introduce la 1.2.0
 
-**Cosa introduce questa modifica.** Un **verificatore di conformità**: controlla
-che il prompt *generato* rispetti le regole che il suo stesso formato dichiara in
-`app/constants/prompts.ts`. Sostituisce il vecchio `promptLinter`, che applicava
-**3 regole generiche** identiche a tutti e cinque i formati mentre i flussi ne
-dichiarano una quarantina, e che **contraddiceva** i flussi in due punti.
+**Un verificatore di conformità**: controlla che il prompt *generato* rispetti le
+regole che il suo stesso formato dichiara in `app/constants/prompts.ts`.
+Sostituisce `promptLinter`, che applicava **3 regole generiche** a tutti e cinque
+i formati mentre i flussi ne dichiarano una quarantina — e che li **contraddiceva**
+in due punti.
 
-Serve **due consumatori** con lo stesso codice:
-- **in-app**: un badge sotto ogni variante, con l'elenco delle regole e le prove;
-- **offline**: l'harness `npm run eval`, che misura il tasso di conformità dei
-  nostri meta-prompt su un corpus fisso di casi.
+Lo stesso codice serve due consumatori:
+- **in app**: un badge sotto ogni variante, con le regole e la **prova** di ogni violazione;
+- **offline**: `npm run eval`, che misura il tasso di conformità dei meta-prompt
+  su un corpus fisso di 66 casi.
 
 **Ambito, deliberatamente stretto**: ogni controllo è **decidibile da un parser**.
-Le regole che richiedono giudizio non sono verificate affatto — un controllo
-approssimativo produce falsi positivi, che è il difetto che rendeva inaffidabile
-il linter precedente.
+Le regole che richiedono giudizio non vengono valutate affatto — un controllo
+approssimativo produce falsi positivi, ed è il difetto che rendeva inaffidabile il
+linter precedente.
 
-**Stato di partenza atteso** (verificalo prima di iniziare):
-- `app/lib/promptLinter.ts` e `app/lib/promptLinter.test.ts` **esistono**
-- `app/components/ResultViewer.tsx` importa `lintPrompt` e usa `LintBadge`
-- `app/lib/i18n/*.ts` (9 file) contengono le 4 chiavi `result.lintOk`,
-  `result.lintIssueOne`, `result.lintIssueOther`, `result.lintDetail`
-- `eval/run-eval.ts` e `eval/prompts.ts` esistono
-- `app/lib/conformance.ts` **non** esiste
-- `package.json` non ha lo script `eval`
-- versione **1.1.1**
+Insieme arrivano: la **riscrittura dei meta-prompt** (misurata, non teorica), due
+**correzioni ai contenuti didattici** in-app, il **default su Flash-Lite** e la
+normalizzazione dei fine-riga nel generatore dello scaffold.
 
-Se lo stato non corrisponde, **fermati e segnala**.
+### Stato di partenza atteso
 
-**Prima di iniziare**: working tree pulito e Gate verde (`npm run lint && npm test`).
-
----
-
-## 1. Copia i file nuovi dal pacchetto
-
-Questo documento arriva insieme a una cartella **`file-da-copiare/`** che
-contiene tutti i file da copiare verbatim, con la stessa struttura di cartelle
-del progetto. Il pacchetto è **autonomo**: non serve accedere al repo pubblico.
-
-| Nel pacchetto | Destinazione nel repo |
+| Verifica | Atteso |
 |---|---|
-| `file-da-copiare/app/lib/conformance.ts` | `app/lib/conformance.ts` |
-| `file-da-copiare/app/lib/conformance.test.ts` | `app/lib/conformance.test.ts` |
-| `file-da-copiare/eval/prompts.ts` | `eval/prompts.ts` (**sovrascrive** il corpus esistente) |
+| `package.json` | versione **1.1.0** |
+| `app/lib/promptLinter.ts` e il suo test | **esistono** |
+| `app/lib/conformance.ts` | **non** esiste |
+| `app/components/ResultViewer.tsx` | importa `lintPrompt`, usa `LintBadge` |
+| `app/lib/i18n/*.ts` (9 file) | contengono `result.lintOk`, `result.lintIssueOne`, `result.lintIssueOther`, `result.lintDetail` |
+| `eval/prompts.ts` e `eval/run-eval.ts` | esistono (corpus di 20 casi) |
+| `package.json` scripts | **non** ha `eval` |
 
-Gli altri file del pacchetto servono ai passi successivi:
-`eval/run-eval.ts` (passo 5), `app/constants/prompts.ts` (passo 12-quater),
-`docs/eval-baseline.md` (passo 12-ter, **da svuotare dei dati**).
+Se non corrisponde, **fermati e segnala**.
 
-⚠️ **Normalizza i fine-riga a LF** dopo la copia se il repo di destinazione usa
-LF: i file del pacchetto potrebbero arrivare con CRLF.
-
-⚠️ Se un file del pacchetto manca, **fermati e segnala**: non riscriverlo a
-memoria.
-
-**Verifica**: `npx vitest run app/lib/conformance.test.ts` → **41 test verdi**.
-
-> **Nota sull'anonimizzazione** (regola trasversale, presente in tutti i formati):
-> il check `anon.intact` verifica il `VINCOLO UNIVERSALE` del meta-prompt — *"NON
-> modificare mai i segnaposto di anonimizzazione"*. La logica è **inversa** a
-> quella che verrebbe istintiva: un segnaposto **ben formato** (`[EMAIL_1]`,
-> `[TELEFONO_2]`, `[CARTA_1]`, `[CCV_1]`, `[MANUALE_3]`) è **output corretto** e
-> non va **mai** segnalato — il vecchio linter lo faceva, ed era un difetto.
-> Viene segnalata solo la **corruzione** (`[EMAIL 1]`, `[Email_1]`, `[EMAIL_]`),
-> che rende il valore reale irrecuperabile e rompe silenziosamente la promessa di
-> privacy. La forma generica `[EMAIL_X]` è ammessa perché la usa il meta-prompt
-> stesso, e un prompt generato può legittimamente riprenderla.
+**Prima di iniziare**: working tree pulito (`git status`) e Gate verde
+(`npm run lint && npm test`). È la baseline con cui confronterai alla fine.
 
 ---
 
-## 2. `app/lib/promptOptimizer.ts` — estrai il meta-prompt
+## PARTE A — File da copiare tali e quali
 
-**Motivo**: la copia del `systemInstruction` dentro `eval/run-eval.ts` era
+Copia dal pacchetto, rispettando i percorsi. Sono file **interi**, non frammenti.
+
+| Dal pacchetto | Nel repo | Nota |
+|---|---|---|
+| `file-da-copiare/app/lib/conformance.ts` | `app/lib/conformance.ts` | nuovo |
+| `file-da-copiare/app/lib/conformance.test.ts` | `app/lib/conformance.test.ts` | nuovo |
+| `file-da-copiare/app/constants/prompts.ts` | `app/constants/prompts.ts` | **sostituisce** |
+| `file-da-copiare/eval/prompts.ts` | `eval/prompts.ts` | **sostituisce** (corpus 20 → 66 casi) |
+| `file-da-copiare/eval/run-eval.ts` | `eval/run-eval.ts` | **sostituisce** |
+| `file-da-copiare/scripts/generate-scaffold-constants.mjs` | `scripts/generate-scaffold-constants.mjs` | **sostituisce** |
+| `file-da-copiare/docs/eval-baseline.md` | `docs/eval-baseline.md` | nuovo, **da svuotare** (vedi Parte E) |
+
+⚠️ **`app/constants/prompts.ts`**: se questo fork ha flussi **aggiuntivi o
+diversi** dall'edizione pubblica, **non sovrascrivere**. Applica invece a mano le
+trasformazioni descritte nell'**Appendice 1**, flusso per flusso, e segnala la
+divergenza.
+
+⚠️ **Fine-riga**: se il repo di destinazione usa LF, normalizza i file copiati
+dopo l'operazione.
+
+**Verifica immediata**:
+```bash
+npx vitest run app/lib/conformance.test.ts     # 41 test verdi
+```
+
+---
+
+## PARTE B — Script da eseguire
+
+Modifiche meccaniche su molti file: eseguirle a mano garantisce divergenze.
+Lancia dalla **radice del repo**.
+
+```bash
+node script/i18n-conformance.mjs    # 4 chiavi linter → 2 chiavi conformità, in 9 lingue
+node script/i18n-tips.mjs           # 3 chiavi delle schede didattiche, in 9 lingue
+```
+
+Ognuno stampa `ok: <lingua>` per tutte e nove. Se stampa `NON sostituito` o
+`chiave non trovata`, **fermati e segnala**: significa che le chiavi in questo
+fork hanno un formato diverso.
+
+---
+
+## PARTE C — Modifiche a mano
+
+Sette file. Sono *ibridi* (il fork può averne varianti proprie), quindi vanno
+editati puntualmente. I blocchi vanno inseriti **verbatim**.
+
+### C1 · `app/lib/promptOptimizer.ts` — estrai il meta-prompt
+
+**Perché**: la copia del `systemInstruction` dentro `eval/run-eval.ts` era
 hand-copiata e **aveva già divergito** (mancava il vincolo di formattazione),
 quindi l'harness misurava un prompt mai spedito. Con una fonte unica il drift
 diventa impossibile per costruzione.
 
-**Inserisci** questa funzione **subito prima** di `export class TruncatedResponseError`:
+Inserisci **subito prima** di `export class TruncatedResponseError`:
 
 ```typescript
 /**
@@ -99,28 +127,27 @@ diventa impossibile per costruzione.
  * (the harness was missing the formatting constraint), which meant the harness
  * measured a prompt we never actually shipped.
  */
-export function buildOptimizerSystemInstruction(tasks: string[]): string {
-  return `Sei un esperto Prompt Engineer. Devi generare versioni ottimizzate dello stesso prompt in base ai flussi richiesti.
+export function buildOptimizerSystemInstruction(tasks: string[], examplesBlock = ''): string {
+  return `Sei un esperto Prompt Engineer. Genera versioni ottimizzate dello stesso prompt, una per ciascun flusso richiesto.
 
-      Esegui ESATTAMENTE i flussi di lavoro specificati qui sotto:
+      Applica i flussi di lavoro specificati qui sotto, ognuno con le sue regole:
       ${tasks.join('\n')}
+${examplesBlock}
 
-      VINCOLO UNIVERSALE: NON modificare mai i segnaposto di anonimizzazione come [EMAIL_X], [TELEFONO_X].
-      VINCOLO DI FORMATTAZIONE (leggibilità): nei prompt generati che usano tag (es. <role>, <context>, <output_format>), separa ogni tag/sezione di primo livello con UNA RIGA VUOTA e non concatenare i tag sulla stessa riga; nei formati Markdown, separa le sezioni con una riga vuota.
+      Vincolo comune a tutti i flussi — segnaposto: riporta i segnaposto di anonimizzazione (es. [EMAIL_X], [TELEFONO_X]) esattamente come li ricevi. Sostituiscono dati personali dell'utente e vengono ripristinati dopo la generazione: un segnaposto alterato non è più riconoscibile e il dato originale va perso.
 
-      Nel campo "spiegazione" fornisci una breve spiegazione delle migliorie apportate in base ai formati richiesti.`;
+      Vincolo comune a tutti i flussi — leggibilità: separa con una riga vuota le sezioni di primo livello, sia i tag (es. <role>, <context>, <output_format>) sia gli heading Markdown, tenendo ogni tag sulla propria riga. Il prompt generato viene letto e modificato a mano dall'utente, quindi la spaziatura è parte del risultato.
+
+      Nel campo "spiegazione" descrivi brevemente le migliorie apportate, riferendole ai formati richiesti.`;
 }
 ```
 
 ⚠️ Il testo dentro il template literal va copiato **carattere per carattere**,
 inclusa l'indentazione a 6 spazi: è il prompt reale che viene spedito.
 
----
+### C2 · `app/hooks/usePromptOptimizer.ts` — tre modifiche
 
-## 3. `app/hooks/usePromptOptimizer.ts` — usa la funzione estratta
-
-**3a.** Nell'import da `../lib/promptOptimizer`, aggiungi
-`buildOptimizerSystemInstruction`. L'import diventa:
+**C2a — import.** Sostituisci l'import da `../lib/promptOptimizer` con:
 
 ```typescript
 import {
@@ -131,31 +158,61 @@ import {
 } from '../lib/promptOptimizer';
 ```
 
-**3b.** Sostituisci l'intero blocco che costruisce il prompt — dalla riga
-`let systemInstruction = \`Sei un esperto Prompt Engineer...` fino alla riga che
-termina con `...in base ai formati richiesti.\`;` — con **una sola riga**:
+**C2b — esempi iniettati una volta sola.** Il blocco degli esempi era appeso a
+**ciascun** flusso: con cinque formati selezionati gli stessi esempi finivano
+**cinque volte** nella stessa richiesta. Il blocco porta già in testa *"per tutti i
+formati selezionati"*: era scritto per un'iniezione sola.
+
+Sostituisci le cinque righe `tasks.push(FLOW_X + exBlock)` con:
 
 ```typescript
-      let systemInstruction = buildOptimizerSystemInstruction(tasks);
+      // The examples block is appended ONCE, not per flow: its own preamble
+      // already reads "per tutti i formati selezionati", so repeating it per
+      // flow duplicated the same text up to five times in a single request —
+      // wasted tokens and the most likely path to a truncated response.
+      const exBlock = buildExamplesBlock(examples);
+      const tasks: string[] = [];
+      if (genChat) tasks.push(FLOW_CHAT_INSTRUCTIONS);
+      if (genCowork) tasks.push(FLOW_COWORK_INSTRUCTIONS);
+      if (genCode) tasks.push(FLOW_CODE_INSTRUCTIONS);
+      if (genSystemUser) tasks.push(FLOW_SYSTEM_USER_INSTRUCTIONS);
+      if (genGemini) tasks.push(FLOW_GEMINI_INSTRUCTIONS);
+```
+
+e la costruzione del prompt con:
+
+```typescript
+      let systemInstruction = buildOptimizerSystemInstruction(tasks, exBlock);
 ```
 
 ⚠️ Mantieni `let` (non `const`): la variabile viene riassegnata subito dopo
 dall'anonimizzazione.
 
----
+**C2c — niente `temperature`.** Sostituisci il `generationConfig` con:
 
-## 4. `app/hooks/usePromptOptimizer.test.ts` — mock parziale
+```typescript
+        // No `temperature`: Google recommends leaving sampling at the model
+        // default for the Gemini 3.x family — "If your existing code explicitly
+        // sets temperature (especially to low values for deterministic
+        // outputs), we recommend removing this parameter" — warning that low
+        // values can cause looping or degradation on complex tasks. Dropping it
+        // also makes production match the eval harness, which never set it: as
+        // long as they differ, every measured baseline carries an asterisk.
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema,
+        },
+```
 
-Il mock sostituisce l'intero modulo e non espone la nuova funzione: **10 test
-falliranno** se salti questo passo.
+### C3 · `app/hooks/usePromptOptimizer.test.ts` — tre modifiche
 
-Sostituisci la riga:
+**C3a — mock parziale.** Senza questo, **10 test falliscono**. Sostituisci
 
 ```typescript
 vi.mock('../lib/promptOptimizer', () => ({ buildResponseSchema, parseOptimizerResponse }));
 ```
 
-con:
+con
 
 ```typescript
 // Partial mock: only the two functions this suite spies on are replaced.
@@ -168,59 +225,143 @@ vi.mock('../lib/promptOptimizer', async (importOriginal) => ({
 }));
 ```
 
----
+**C3b — sostituisci il test sulla temperature.** Il test
+`passa temperature 0.5 e la regola di formattazione` va rimpiazzato da **due**
+test:
 
-## 5. `eval/run-eval.ts` — copia dall'edizione pubblica
+```typescript
+  // The examples block carries its own "per tutti i formati selezionati"
+  // preamble, so one copy covers every flow. Repeating it per flow wasted
+  // tokens and was the most likely path to a truncated response.
+  test('inietta il blocco di esempi UNA sola volta anche con più flussi', async () => {
+    const { result } = renderHook(() => usePromptOptimizer('sk-key', 'gemini-flash'));
+    act(() => {
+      result.current.setInput('ottimizza questo');
+      result.current.setGenCowork(true);
+      result.current.setGenCode(true);
+      result.current.setGenSystemUser(true);
+      result.current.setGenGemini(true);
+    });
+    await act(async () => {
+      await result.current.handleOptimize([{ content: 'ESEMPIO UNICO' }]);
+    });
 
-Sostituisci **l'intero file** con quello di
-`C:\GitHubRepo\Projects\Prompt optimizer\eval\run-eval.ts`.
+    const sent = sendMessage.mock.calls[0][0] as string[];
+    const occurrences = sent.join('\n').split('ESEMPIO UNICO').length - 1;
+    expect(occurrences).toBe(1);
+  });
 
-Cosa cambia rispetto al precedente:
-- modello **fissato** a `gemini-3.5-flash-lite` (prima `gemini-flash-latest`, un
-  **alias mobile** che invalida silenziosamente i confronti storici);
-- **K=3 ripetizioni** per caso (Gemini non è deterministico: con K=1 si misura rumore);
-- esegue il **verificatore** su ogni prompt generato e riporta il **tasso di
-  conformità per regola**, con le prove delle violazioni;
-- importa `buildOptimizerSystemInstruction` invece della copia divergente.
+  test('non imposta temperature e passa i vincoli comuni', async () => {
+    const { result } = renderHook(() => usePromptOptimizer('sk-key', 'gemini-flash'));
+    act(() => { result.current.setInput('ottimizza questo'); });
+    await act(async () => { await result.current.handleOptimize(); });
 
----
-
-## 6. `package.json` — script `eval`
-
-Aggiungi, subito dopo la riga dello script `sync:standards` (o dopo
-`generate:scaffold` se `sync:standards` non esiste in questo repo):
-
-```json
-    "eval": "tsx eval/run-eval.ts",
+    // Asserting generationConfig EXACTLY (not objectContaining) so that
+    // re-introducing `temperature` fails loudly: Google recommends the model
+    // default for Gemini 3.x, and omitting it keeps production identical to the
+    // eval harness — while they differ, every measured baseline is suspect.
+    expect(getGenerativeModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: expect.anything(),
+        },
+      }),
+    );
+    // Pins the two constraints shared by every flow. Asserting the substance
+    // rather than a heading keeps the test meaningful across rewordings, while
+    // still failing if a constraint is dropped.
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.stringContaining('riga vuota le sezioni di primo livello')]),
+    );
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.stringContaining('segnaposto di anonimizzazione')]),
+    );
+  });
 ```
 
----
+### C4 · `app/hooks/useApiKeyConfig.ts` — default su Flash-Lite
 
-## 7. `app/lib/i18n/*.ts` — sostituisci 4 chiavi con 2, in tutte e 9 le lingue
+La preferenza puntava a `gemini-1.5-flash-latest`, ormai vecchio. Sostituisci il
+blocco `const defaultM = …` con:
 
-In **ognuno** dei 9 file (`it, en, es, fr, de, pt, ja, zh, zh-Hant`), rimuovi le
-quattro righe contigue `result.lintOk`, `result.lintIssueOne`,
-`result.lintIssueOther`, `result.lintDetail` e inseriscine due al loro posto:
+```typescript
+          // Default: the current Flash-Lite alias — cheapest and fastest tier,
+          // and a MOVING alias so the app follows Google's current model
+          // without a code change. (The eval harness pins an exact version
+          // instead: there comparability across runs matters more than being
+          // current.) The chain degrades gracefully because the list is fetched
+          // live and its naming has changed before.
+          const defaultM =
+            formattedModels.find((m) => m.id === 'gemini-flash-lite-latest') ||
+            formattedModels.find((m) => m.id.includes('flash-lite') && m.id.includes('latest')) ||
+            formattedModels.find((m) => m.id.includes('flash-lite')) ||
+            formattedModels.find((m) => m.id.includes('flash-latest')) ||
+            formattedModels.find((m) => m.id.includes('flash')) ||
+            formattedModels[0];
+```
 
-| Lingua | `result.conformance` | `result.conformanceDetail` |
-|---|---|---|
-| it | `'{passed}/{total} regole del formato rispettate'` | `'Dettaglio regole'` |
-| en | `'{passed}/{total} format rules satisfied'` | `'Rule detail'` |
-| es | `'{passed}/{total} reglas del formato cumplidas'` | `'Detalle de reglas'` |
-| fr | `'{passed}/{total} règles du format respectées'` | `'Détail des règles'` |
-| de | `'{passed}/{total} Formatregeln erfüllt'` | `'Regeldetails'` |
-| pt | `'{passed}/{total} regras do formato cumpridas'` | `'Detalhe das regras'` |
-| ja | `'書式ルール {passed}/{total} 準拠'` | `'ルールの詳細'` |
-| zh | `'符合 {passed}/{total} 项格式规则'` | `'规则详情'` |
-| zh-Hant | `'符合 {passed}/{total} 項格式規則'` | `'規則詳情'` |
+### C5 · `app/hooks/useApiKeyConfig.test.ts` — due test
 
-Formato di ciascuna riga: `  'result.conformance': <valore>,`
+Inseriscili **prima** del test `stays unconfigured when no key was ever stored`:
 
----
+```typescript
+  // The default is the Flash-Lite alias: cheapest tier, and moving, so the app
+  // follows Google's current model without a code change. Pinning it here means
+  // a future reshuffle of the preference chain has to be deliberate.
+  test('preferisce Flash-Lite come modello di default quando è disponibile', async () => {
+    getStoredApiKey.mockResolvedValue('sk-existing');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          models: [
+            { name: 'models/gemini-3.5-pro', displayName: 'Pro', supportedGenerationMethods: ['generateContent'] },
+            { name: 'models/gemini-flash-latest', displayName: 'Flash', supportedGenerationMethods: ['generateContent'] },
+            { name: 'models/gemini-flash-lite-latest', displayName: 'Flash Lite', supportedGenerationMethods: ['generateContent'] },
+          ],
+        }),
+      }),
+    );
 
-## 8. `app/components/ResultViewer.tsx` — cinque modifiche
+    const { result } = renderHook(() => useApiKeyConfig());
+    await waitFor(() => expect(result.current.modelsStatus).toBe('loaded'));
 
-**8a. Import.** Sostituisci
+    expect(result.current.selectedModel).toBe('gemini-flash-lite-latest');
+  });
+
+  // Google has renamed model families before, so the chain must degrade instead
+  // of falling through to whatever happens to be first in the list.
+  test('ripiega su un Flash-Lite versionato se manca l\'alias', async () => {
+    getStoredApiKey.mockResolvedValue('sk-existing');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          models: [
+            { name: 'models/gemini-3.5-pro', displayName: 'Pro', supportedGenerationMethods: ['generateContent'] },
+            { name: 'models/gemini-3.5-flash-lite', displayName: 'Flash Lite 3.5', supportedGenerationMethods: ['generateContent'] },
+          ],
+        }),
+      }),
+    );
+
+    const { result } = renderHook(() => useApiKeyConfig());
+    await waitFor(() => expect(result.current.modelsStatus).toBe('loaded'));
+
+    expect(result.current.selectedModel).toBe('gemini-3.5-flash-lite');
+  });
+```
+
+⚠️ Se in questo fork il test esistente asserisce
+`selectedModel === 'gemini-1.5-flash-latest'`, quel valore resta corretto: in
+quella lista Flash-Lite non c'è, quindi la catena ripiega comunque su di lui.
+
+### C6 · `app/components/ResultViewer.tsx` — cinque modifiche
+
+**C6a — import.** Sostituisci
 
 ```typescript
 import { lintPrompt, type LintResult } from '../lib/promptLinter';
@@ -239,7 +380,7 @@ import {
 } from '../lib/conformance';
 ```
 
-**8b. Componente.** Sostituisci **l'intera funzione `LintBadge`** con:
+**C6b — componente.** Sostituisci **l'intera funzione `LintBadge`** con:
 
 ```tsx
 // Reports how many of the rules THIS format declares are actually satisfied by
@@ -271,16 +412,17 @@ function ConformanceBadge({ result }: { result: ConformanceResult }) {
 }
 ```
 
-**8c. `PairControlsProps`.** Sostituisci `lintResult: LintResult;` con
+**C6c — `PairControlsProps`.** Sostituisci `lintResult: LintResult;` con
 `conformance: ConformanceResult;`.
 
-**8d. `PairControls`.** Nella firma, sostituisci `lintResult` con `conformance`.
-Poi **sposta il badge**: rimuovi `<LintBadge result={lintResult} />` da **sopra**
-i pulsanti e aggiungi `<ConformanceBadge result={conformance} />` come **ultimo
-elemento** prima della chiusura `</div>` della funzione. *(Motivo: nelle altre
-varianti il badge sta sotto i pulsanti; così la posizione è uniforme.)*
+**C6d — `PairControls`.** Nella firma sostituisci `lintResult` con
+`conformance`. Poi **sposta il badge**: togli `<LintBadge result={lintResult} />`
+da **sopra** i pulsanti e metti `<ConformanceBadge result={conformance} />` come
+**ultimo elemento** prima della `</div>` di chiusura della funzione. *(Motivo:
+nelle altre varianti il badge sta sotto i pulsanti; così la posizione è
+uniforme.)*
 
-**8e. I cinque punti di chiamata.** Sostituzioni una a una:
+**C6e — i cinque punti di chiamata.**
 
 | Da | A |
 |---|---|
@@ -288,17 +430,27 @@ varianti il badge sta sotto i pulsanti; così la posizione è uniforme.)*
 | `<LintBadge result={lintPrompt(shownText('promptCowork', result.promptCowork))} />` | `<ConformanceBadge result={checkCowork(shownText('promptCowork', result.promptCowork))} />` |
 | `<LintBadge result={lintPrompt(shownText('promptCode', result.promptCode))} />` | `<ConformanceBadge result={checkCode(shownText('promptCode', result.promptCode))} />` |
 | `<LintBadge result={lintPrompt(shownText('promptGemini', result.promptGemini))} />` | `<ConformanceBadge result={checkGemini(shownText('promptGemini', result.promptGemini))} />` |
-| `lintResult={lintPrompt(\`${shownSystem()}\n\n${shownUser()}\`)}` | `conformance={checkSystemUser(shownSystem(), shownUser())}` |
+| `lintResult={lintPrompt(...)}` (nella coppia) | `conformance={checkSystemUser(shownSystem(), shownUser())}` |
 
 ⚠️ Il verificatore gira su `shownText(...)`, cioè **ciò che l'utente vede**
 (quindi la versione rifinita, se ha usato "Rifinisci"). È voluto: si verifica
 l'artefatto consegnato, non un intermedio.
 
+### C7 · `package.json` — script e versione
+
+Aggiungi lo script (subito dopo `generate:scaffold`):
+
+```json
+    "eval": "tsx eval/run-eval.ts",
+```
+
+e porta `"version"` a `"1.2.0"`.
+
 ---
 
-## 9. Rimuovi il vecchio linter
+## PARTE D — Da eliminare
 
-Ora è orfano; la regola d'igiene vieta il codice morto:
+`promptLinter` è ora orfano, e la regola d'igiene vieta il codice morto:
 
 ```
 app/lib/promptLinter.ts
@@ -310,22 +462,26 @@ app/lib/promptLinter.test.ts
 
 ---
 
-## 10. Bump di versione 1.1.1 → 1.2.0
+## PARTE E — Versione, changelog, baseline
 
-È una **feature** (+MINOR). Tre file allineati:
+1. **Versione 1.2.0** in tre file, tenuti allineati:
+   - `package.json` (già fatto in C7)
+   - `src-tauri/Cargo.toml`, sezione `[package]`
+   - `src-tauri/Cargo.lock`, l'entry **immediatamente sotto** `name = "app"`
+   ⚠️ In `Cargo.lock` esistono altri pacchetti alla stessa versione: modifica
+   **solo** quello sotto `name = "app"`.
 
-1. `package.json` → `"version": "1.2.0"`
-2. `src-tauri/Cargo.toml` → sezione `[package]`, `version = "1.2.0"`
-3. `src-tauri/Cargo.lock` → l'entry **immediatamente sotto** `name = "app"`
+2. **`CHANGELOG.md`**: aggiungi una voce `[1.2.0]` che riassuma verificatore,
+   harness, riscrittura dei meta-prompt, schede didattiche e default Flash-Lite.
 
-⚠️ In `Cargo.lock` esistono altri pacchetti a `1.1.1`/`1.0.0`: modifica **solo**
-quello sotto `name = "app"`.
-
-Aggiungi anche la voce in `CHANGELOG.md` (se il repo ne ha uno).
+3. **`docs/eval-baseline.md`**: il file copiato è un **modello**. **Svuotalo dei
+   dati**: i tassi lì dentro appartengono all'edizione pubblica, a quel commit e a
+   quel corpus. Tieni struttura, note di metodo e procedura; cancella le run.
+   Registrerai i **tuoi** numeri dopo la tua prima esecuzione.
 
 ---
 
-## 11. Gate e verifiche
+## PARTE F — Verifica
 
 ```bash
 npm run lint
@@ -333,158 +489,89 @@ npm test
 npx tsc --noEmit
 ```
 
-Attesi: lint pulito · **tutti i test verdi** (il conteggio sale di ~33 dai nuovi
-test e scende di ~7 per il linter rimosso) · typecheck pulito.
+Attesi: lint pulito · **tutti i test verdi** (~+41 dai nuovi test di conformità,
++2 dai test sul modello, −7 dal linter rimosso) · typecheck pulito.
 
-**Verifica funzionale dell'harness senza spendere quota**, una sola chiamata:
+**Verifica funzionale dell'harness**, una sola chiamata:
 
 ```bash
 EVAL_ONLY=code-genera-docs EVAL_REPS=1 EVAL_SLEEP_MS=0 npx tsx eval/run-eval.ts
 ```
 
-Deve stampare una tabella di conformità per il flusso `code` e scrivere
-`eval/output/latest.md`. Richiede `GEMINI_API_KEY` in `.env.local`.
+Deve stampare una tabella di conformità e scrivere `eval/output/latest-*.md`.
+Richiede `GEMINI_API_KEY` in `.env.local`.
 
----
-
-## 12. Commit
-
-Su `master` (branch di questo repo), **senza push**:
+**Commit** (nessun push senza conferma esplicita dell'utente):
 
 ```
-feat(conformance): verificatore per formato + harness di regressione sui prompt
-
-- Nuovo app/lib/conformance.ts: un checker per formato (chat, cowork, code,
-  system+user, gemini, scaffold) che verifica SOLO regole decidibili da un
-  parser. Sostituisce promptLinter, che applicava 3 regole generiche a tutti i
-  formati e contraddiceva i flussi su follow-up e segnaposto.
-- eval/: corpus portato a 66 casi (da 20), pesati sul numero di regole per
-  flusso; run-eval.ts diventa un misuratore, con modello fissato
-  gemini-3.5-flash-lite, K=3 ripetizioni e tasso di conformità per regola.
-- promptOptimizer.ts: estratto buildOptimizerSystemInstruction, condiviso da
-  produzione e harness — la copia nell'harness era già divergente.
-- ResultViewer: badge di conformità per variante, posizione uniforme, con le
-  prove delle violazioni; i18n aggiornata in 9 lingue.
-- Rimosso app/lib/promptLinter.ts (orfano).
-- Bump 1.1.1 -> 1.2.0.
+feat: verificatore di conformità, harness di regressione sui prompt, meta-prompt riscritti (1.2.0)
 ```
 
-**NON** fare `git push` né creare release/tag senza conferma esplicita dell'utente.
-
 ---
 
-## 12-bis. Modalità multi-flusso dell'harness
+## Appendice 1 — La riscrittura dei meta-prompt, se devi applicarla a mano
 
-Già inclusa se hai copiato `eval/run-eval.ts` al passo 5. Serve a misurare il
-costo del batching: la run di default esegue **un formato per chiamata** (il caso
-migliore), mentre la produzione ne genera fino a cinque insieme.
+Serve **solo** se non hai potuto sovrascrivere `app/constants/prompts.ts` (fork
+con flussi propri). Contenuto normativo invariato: cambiano il tono e la
+formulazione.
 
-```bash
-npm run eval                 # un formato per chiamata
-EVAL_MULTI=1 npm run eval    # cinque formati in una chiamata, come la produzione
-```
-
-I due report finiscono in file distinti (`latest-single.md` / `latest-multi.md`):
-confonderli invaliderebbe il confronto.
-
----
-
-## 12-ter. Registro della baseline
-
-Copia `docs/eval-baseline.md` dall'edizione pubblica **come modello**, poi
-**svuotalo dei dati**: i tassi lì dentro appartengono a quel repo e a quel
-commit. Esegui la tua run e registra i **tuoi** numeri.
-
-⚠️ `eval/output/` resta **gitignorata**: i report completi pesano ~220 KB a run e
-sono riproducibili. Si versiona solo il record sintetico.
-
----
-
-## 12-quater. Riscrittura dei meta-prompt (stile e regola 4 di Gemini)
-
-Copia **verbatim** dall'edizione pubblica:
-
-| Sorgente | Destinazione |
-|---|---|
-| `app/constants/prompts.ts` | `app/constants/prompts.ts` |
-| la funzione `buildOptimizerSystemInstruction` in `app/lib/promptOptimizer.ts` | idem |
-
-⚠️ **Se questo repo ha flussi aggiuntivi o modificati** rispetto all'edizione
-pubblica, **non sovrascrivere il file**: applica invece le tre trasformazioni
-descritte sotto, flusso per flusso. **Fermati e segnala** se non è chiaro.
-
-> ⚠️ **Distinzione critica: tre assi, e solo uno va ridotto.** È l'errore più
-> facile da commettere replicando questa modifica — l'ho commesso io stesso, e
-> l'ha intercettato l'utente.
+> ### ⚠️ Tre assi, e solo uno va ridotto
+>
+> È l'errore più facile da commettere. L'ho commesso io e l'ha intercettato
+> l'utente.
 >
 > | Asse | Esempio | Direzione |
 > |---|---|---|
-> | **Modo** imperativo | *"Scrivi X"* vs *"Potresti scrivere X?"* | ✅ **invariato**, resta imperativo |
+> | **Modo** imperativo | *"Scrivi X"* vs *"Potresti scrivere X?"* | ✅ **invariato** |
 > | **Intensità** | `ASSOLUTAMENTE VIETATO`, `pena il fallimento`, maiuscolo | ⬇️ **azzerare** |
-> | **Portata** | *sempre*, *ogni*, *ciascun*, *tutti* | ⬆️ **rafforzare**, non ridurre |
+> | **Portata** | *sempre*, *ogni*, *ciascun*, *tutti* | ⬆️ **rafforzare** |
 >
 > L'imperativo **non** è stato ritrattato: Anthropic lo raccomanda tuttora —
 > *"If you say 'can you suggest some changes,' Claude will sometimes provide
 > suggestions rather than implementing them"*. E la portata va resa **più**
-> esplicita, non meno: i modelli recenti *"do not silently generalize an
-> instruction from one item to another"* (esempio ufficiale: *"Apply this
-> formatting to every section, **not just the first one**"*).
+> esplicita: i modelli recenti *"do not silently generalize an instruction from
+> one item to another"*.
 >
-> In italiano i due assi si esprimono con parole simili — `SEMPRE` urlato e
-> `sempre` quantificatore — ma fanno lavori opposti. **Verifica dopo la
-> riscrittura**: i marcatori di intensità devono essere a **zero**, i
-> quantificatori di portata devono essere **ancora presenti** (nel repo pubblico:
-> 14 occorrenze fra *sempre*, *ogni*, *ciascun*, *tutti*).
+> **Verifica dopo la riscrittura**: marcatori di intensità a **zero**,
+> quantificatori di portata **ancora presenti** (nel repo pubblico: 14 fra
+> *sempre*, *ogni*, *ciascun*, *tutti*).
 
-**Cosa cambia — contenuto normativo invariato, cambia il tono:**
+**Le tre mosse:**
 
 1. **Via minacce e maiuscolo enfatico.** `Regole TASSATIVE (pena il fallimento e
    la regressione del prompt)` → `Regole del formato`. Eliminati
    `ASSOLUTAMENTE VIETATO`, `Pena: fallimento generazione`, `OBBLIGATORIO`,
-   `ESCLUSIVAMENTE`. Fonte: OpenAI (*"not necessary to use all-caps or other
-   incentives like bribes or tips"*) e Anthropic (*"dial back any aggressive
-   language"*, causa **over-triggering** sui modelli recenti).
+   `ESCLUSIVAMENTE`.
 2. **Divieti → istruzioni positive col perché.** Esempio, regola 1 di
    `FLOW_CODE`: da *"È ASSOLUTAMENTE VIETATO formattare i file locali come link
    Markdown. Pena: fallimento generazione"* a *"Scrivi i percorsi in backtick,
    perché l'agente li usa come percorsi reali; un link Markdown lo porterebbe a
-   cercare una risorsa remota inesistente"*. Fonte: Anthropic — motivare
-   un'istruzione è l'unica regola del corpus **senza controindicazioni**.
-3. **Vie d'uscita dove la regola non è sempre soddisfacibile.** La regola 4 di
-   `FLOW_GEMINI` pretendeva comandi concreti anche quando l'input non dichiara
-   una toolchain: misurato **87%** di conformità, con tutti i fallimenti su
-   input senza stack. Ora chiede di scegliere la convenzione più diffusa,
-   **dichiarare l'assunzione** e dare comunque i comandi. Stessa aggiunta alla
-   regola 7 di `FLOW_CODE`.
+   cercare una risorsa remota inesistente"*.
+3. **Vie d'uscita** dove la regola non è sempre soddisfacibile: se l'input non
+   dichiara la toolchain, **dichiarare l'assunzione** invece di pretendere
+   l'impossibile.
 
-**Due correzioni mirate incluse**, entrambe della stessa natura — una regola che
-davamo per implicita:
-- `FLOW_CHAT` ora chiede **esplicitamente di chiudere i tag** (`</role>`,
-  `</context>`, …). Misurato: in circa **una generazione su quattro** Gemini li
-  lasciava aperti.
+**Due correzioni mirate**, entrambe della stessa natura — una regola data per
+implicita:
+- `FLOW_CHAT` ora chiede **esplicitamente di chiudere i tag**. Misurato: in circa
+  **una generazione su quattro** restavano aperti.
 - `FLOW_GEMINI` ora dice **esplicitamente "senza tag XML"** (prima diceva solo
-  *"Markdown puro"*, cioè *cosa usare* e mai *cosa escludere*). Senza quella
-  frase l'output degenerava in formato Chat, con `<role>`/`<context>` al posto
-  degli heading.
+  *"Markdown puro"*: cosa usare, mai cosa escludere) ed è diventata la **regola 1
+  numerata**. Senza, l'output degenerava in formato Chat.
 
-> ### ⭐ La lezione più importante di questa modifica (misurata, non teorica)
+> ### ⭐ La lezione più importante, misurata
 >
 > **Un requisito che merita enfasi merita una regola propria.**
 >
 > Togliendo il maiuscolo da `È VIETATO MODIFICARE 'CLAUDE.md', ma è OBBLIGATORIO
-> LEGGERLO`, la conformità è **crollata dal 93% al 57%**. Il maiuscolo non stava
-> facendo *intensità*: stava facendo **salienza**, perché l'istruzione era
-> sepolta in coda a una regola lunga.
+> LEGGERLO`, la conformità è **crollata dal 93% al 57%**: il maiuscolo non faceva
+> *intensità*, faceva **salienza**, su un'istruzione sepolta in coda a una regola
+> lunga. La cura non è rimettere le maiuscole ma **scorporare l'istruzione in una
+> regola numerata**: così è risalita al **100%**, meglio dell'originale enfatico.
 >
-> La cura **non** è rimettere le maiuscole. È **scorporare l'istruzione in una
-> regola numerata propria**: così è risalita al **100%** — meglio dell'originale
-> enfatico, senza una sola maiuscola.
->
-> **Applica lo stesso criterio replicando**: se in questo repo una regola porta
-> in coda un requisito importante, scorporalo invece di limitarti ad
-> ammorbidirne il tono. Altrimenti riproduci il crollo, non il miglioramento.
-
-**Risultati misurati nel repo pubblico** (4 run, stesso corpus e modello):
+> Se in questo fork una regola porta in coda un requisito importante,
+> **scorporalo** invece di limitarti ad ammorbidirne il tono. Altrimenti riproduci
+> il crollo, non il miglioramento.
 
 | Metrica | Baseline enfatica | Solo de-enfasi | + salienza strutturale |
 |---|---|---|---|
@@ -492,210 +579,92 @@ davamo per implicita:
 | `code.claudeMd` | 93% | **57%** 🔴 | **100%** ✅ |
 | `gemini.headings` | 100% | 92% 🔴 | **100%** ✅ |
 | `gemini.noGenericPhrases` | 100% | 96% 🔴 | **100%** ✅ |
-| `gemini.concreteCommands` | 87% | 65% | 70% ⚠️ ancora aperto |
 
-**Test da aggiornare.** In `app/hooks/usePromptOptimizer.test.ts`, il test
-`passa temperature 0.5 e la regola di formattazione` asserisce
-`stringContaining('VINCOLO DI FORMATTAZIONE')`, stringa che non esiste più.
-Sostituisci quell'asserzione con:
+---
 
-```typescript
-    // Pins the two constraints shared by every flow. Asserting the substance
-    // rather than a heading keeps the test meaningful across rewordings, while
-    // still failing if a constraint is dropped.
-    expect(sendMessage).toHaveBeenCalledWith(
-      expect.arrayContaining([expect.stringContaining('riga vuota le sezioni di primo livello')]),
-    );
-    expect(sendMessage).toHaveBeenCalledWith(
-      expect.arrayContaining([expect.stringContaining('segnaposto di anonimizzazione')]),
-    );
-```
-
-⚠️ **Questa modifica va misurata, non data per buona.** Esegui l'harness prima e
-dopo, e confronta. Se la conformità scende, `git revert` e annotalo nel registro:
-le fonti valgono per i loro modelli, non necessariamente per Gemini Flash-Lite
-attraverso un meta-prompt in italiano.
-
-**Se durante una run cade la rete**: l'harness cattura l'errore, lo registra fra
-le chiamate fallite e prosegue — non serve rilanciare tutto. Conta però le
-osservazioni per flusso prima di confrontare: un blocco contiguo di fallimenti
-può azzerare un intero flusso e rendere quel confronto privo di significato.
-Rilancia il solo flusso colpito:
+## Appendice 2 — L'harness: uso, costi e trappole
 
 ```bash
-EVAL_FLOW=gemini npm run eval    # 10 casi × 3 = 30 chiamate, ~7 minuti
+npm run eval                          # 66 casi, un formato per chiamata
+EVAL_MULTI=1 npm run eval             # cinque formati in una chiamata (come la produzione)
+EVAL_FLOW=code npm run eval           # un solo flusso
+EVAL_BACKEND=claude npm run eval      # genera con il CLI claude invece di Gemini
 ```
 
-È già successo (2026-08-27: 51 chiamate perse in blocco, il flusso `gemini`
-ridotto a 3 osservazioni su 30).
+**Quota**: il free tier Gemini è **500 richieste al giorno**. Una run completa ne
+consuma **198**, cioè il 40% — al massimo due run piene al giorno.
+
+**Verificare la quota**: guarda il **contatore reale** su
+[ai.dev/rate-limit](https://ai.dev/rate-limit), **non** una chiamata di prova. Una
+chiamata riuscita dimostra solo *"ce n'era almeno una"* — e la consuma.
+
+**Se cade la rete o si esaurisce la quota**: l'harness registra l'errore e
+prosegue. Conta le osservazioni **per flusso** prima di confrontare: un blocco
+contiguo di fallimenti può azzerare un intero flusso e rendere quel confronto
+privo di significato. Rilancia il solo flusso colpito con `EVAL_FLOW=<flusso>`.
+
+> ### ⛔ Il backend Claude è confinato — non rimuovere il confinamento
+>
+> Il CLI è un **agente di coding completo**, non un endpoint di testo. Il
+> 2026-08-28, invocato senza restrizioni nella directory del repo, ha preso tre
+> input del corpus alla lettera e li ha **eseguiti**: ha creato `docs/TESTING.md`,
+> l'ha registrato in `CLAUDE.md` e ha riscritto `CONTRIBUTING.md` — dentro il
+> repository che avrebbe dovuto misurare. Quelle risposte comparivano poi come
+> *"JSON malformato"*, perché l'agente era andato a lavorare invece di rispondere.
+>
+> **Un banco di prova non deve poter modificare il sistema che misura.** Tre
+> livelli, in ordine crescente di affidabilità: `--restricted`,
+> `--disallowed-tools`, e soprattutto un **cwd temporaneo usa-e-getta** — ciò che
+> sopravvive ai primi due può raggiungere solo una cartella vuota.
 
 ---
 
-## 12-quinquies. L8 — esempi few-shot iniettati una volta sola
+## Appendice 3 — Note di lettura dei numeri
 
-**Il difetto**: `exBlock` era appeso a **ciascun** flusso, quindi con cinque
-formati selezionati gli stessi esempi finivano **cinque volte** nella stessa
-richiesta. Il blocco porta già in testa *"per tutti i formati selezionati"*: era
-scritto per **un'iniezione sola**, e la duplicazione contraddiceva il suo stesso
-testo. È il percorso più probabile verso una risposta troncata.
+I tassi servono a **falsificare** una regola, non a certificarla: una regola al
+100% su ~10 casi dice poco, una al 60% dice che il meta-prompt non la sta
+imponendo. Si confronta il **delta** fra due esecuzioni, non il livello.
 
-**In `app/lib/promptOptimizer.ts`**, aggiungi il secondo parametro alla funzione:
+**Non trasformarli in un punteggio di qualità 0-100 da mostrare all'utente.** Un
+punteggio LLM-like ci ha già ingannati: in un esperimento di luglio un judge-loop
+è passato da 87 a 72 amplificando rumore.
 
-```typescript
-export function buildOptimizerSystemInstruction(tasks: string[], examplesBlock = ''): string {
-```
+**K=3 non è pedanteria**: il difetto più grave trovato (tag non chiusi nel 24% dei
+casi) era invisibile con K=1 — c'era il **67% di probabilità di dichiarare la
+regola sana**.
 
-e inserisci `${examplesBlock}` su una riga propria **subito dopo**
-`${tasks.join('\n')}`.
-
-**In `app/hooks/usePromptOptimizer.ts`**, togli `+ exBlock` da tutte e cinque le
-righe `tasks.push(...)` e passalo invece alla funzione:
-
-```typescript
-      // The examples block is appended ONCE, not per flow: its own preamble
-      // already reads "per tutti i formati selezionati", so repeating it per
-      // flow duplicated the same text up to five times in a single request —
-      // wasted tokens and the most likely path to a truncated response.
-      const exBlock = buildExamplesBlock(examples);
-      const tasks: string[] = [];
-      if (genChat) tasks.push(FLOW_CHAT_INSTRUCTIONS);
-      if (genCowork) tasks.push(FLOW_COWORK_INSTRUCTIONS);
-      if (genCode) tasks.push(FLOW_CODE_INSTRUCTIONS);
-      if (genSystemUser) tasks.push(FLOW_SYSTEM_USER_INSTRUCTIONS);
-      if (genGemini) tasks.push(FLOW_GEMINI_INSTRUCTIONS);
-```
-
-```typescript
-      let systemInstruction = buildOptimizerSystemInstruction(tasks, exBlock);
-```
-
-**Test di regressione da aggiungere** in `usePromptOptimizer.test.ts` (senza di
-esso la duplicazione può tornare inosservata):
-
-```typescript
-  test('inietta il blocco di esempi UNA sola volta anche con più flussi', async () => {
-    const { result } = renderHook(() => usePromptOptimizer('sk-key', 'gemini-flash'));
-    act(() => {
-      result.current.setInput('ottimizza questo');
-      result.current.setGenCowork(true);
-      result.current.setGenCode(true);
-      result.current.setGenSystemUser(true);
-      result.current.setGenGemini(true);
-    });
-    await act(async () => {
-      await result.current.handleOptimize([{ content: 'ESEMPIO UNICO' }]);
-    });
-
-    const sent = sendMessage.mock.calls[0][0] as string[];
-    const occurrences = sent.join('\n').split('ESEMPIO UNICO').length - 1;
-    expect(occurrences).toBe(1);
-  });
-```
+**Prima di dichiarare un reperto, guarda le prove.** È già successo due volte che
+un tasso basso fosse un difetto del *verificatore* e non del prodotto.
 
 ---
 
-## 12-sexies. L9 — non imporre `temperature`
+## Checklist finale
 
-**Il difetto**: `generationConfig` imponeva `temperature: 0.5` a **qualunque**
-modello l'utente scegliesse. Google, per la famiglia Gemini 3.x: *"we **strongly
-recommend** keeping them at their default values"* e *"If your existing code
-explicitly sets temperature (especially to low values for deterministic outputs),
-we recommend **removing this parameter**"* — con l'avvertenza che valori bassi
-possono causare **looping o degrado** su task complessi.
-
-**Il motivo che lo rende urgente è però interno**: l'harness **non** imposta
-`temperature`, la produzione sì. Finché differiscono, ogni baseline misurata
-descrive una configurazione diversa da quella spedita — e porta un asterisco.
-
-**In `app/hooks/usePromptOptimizer.ts`**, sostituisci il `generationConfig` con:
-
-```typescript
-        // No `temperature`: Google recommends leaving sampling at the model
-        // default for the Gemini 3.x family — "If your existing code explicitly
-        // sets temperature (especially to low values for deterministic
-        // outputs), we recommend removing this parameter" — warning that low
-        // values can cause looping or degradation on complex tasks. Dropping it
-        // also makes production match the eval harness, which never set it: as
-        // long as they differ, every measured baseline carries an asterisk.
-        generationConfig: {
-          responseMimeType: 'application/json',
-          responseSchema,
-        },
-```
-
-**Test da aggiornare**: quello che asseriva `temperature: 0.5` deve ora asserire
-`generationConfig` **in modo esatto**, così che una reintroduzione fallisca:
-
-```typescript
-    expect(getGenerativeModel).toHaveBeenCalledWith(
-      expect.objectContaining({
-        generationConfig: {
-          responseMimeType: 'application/json',
-          responseSchema: expect.anything(),
-        },
-      }),
-    );
-```
-
-⚠️ **Valutazione da fare nel fork**: se il tuo repo permette di scegliere anche
-modelli Gemini 2.x, quelli useranno il proprio default invece di 0.5. La
-raccomandazione di Google è specifica per la famiglia 3.x; il whitepaper 2024
-suggeriva valori bassi per i modelli precedenti. Decisione presa nel repo
-pubblico: **rimuovere**, perché la lista modelli è caricata live e l'utente
-sceglierà modelli recenti.
-
----
-
-## 13. Checklist finale
-
-- [ ] `app/lib/conformance.ts` + test copiati — 33 test verdi
-- [ ] `eval/prompts.ts` sostituito — 66 casi
-- [ ] `buildOptimizerSystemInstruction` estratta e usata dall'hook
-- [ ] Mock parziale nel test dell'hook — 19 test verdi
-- [ ] `eval/run-eval.ts` sostituito
-- [ ] Script `eval` in `package.json`
-- [ ] i18n: 4 chiavi → 2, in tutte e 9 le lingue
-- [ ] `ResultViewer`: import, componente, prop della coppia, 5 punti di chiamata
-- [ ] `promptLinter.ts` e il suo test rimossi, nessun riferimento residuo
-- [ ] Modalità multi-flusso disponibile (`EVAL_MULTI=1`)
-- [ ] `docs/eval-baseline.md` creato **vuoto dei dati altrui**
-- [ ] `prompts.ts` e `buildOptimizerSystemInstruction` riscritti (stile + regola 4)
-- [ ] Test del meta-prompt aggiornato alle nuove stringhe
-- [ ] Versione 1.2.0 nei tre file
-- [ ] `npm run lint && npm test && npx tsc --noEmit` puliti
-- [ ] Smoke test dell'harness eseguito
-- [ ] **Run di baseline eseguita e registrata** — prima e dopo la riscrittura
+- [ ] **A** — 7 file copiati; `conformance.test.ts` → 41 test verdi
+- [ ] **B** — due script eseguiti, `ok` su tutte e 9 le lingue
+- [ ] **C1** — `buildOptimizerSystemInstruction` estratta
+- [ ] **C2** — import, esempi una volta sola, niente `temperature`
+- [ ] **C3** — mock parziale + due test nuovi
+- [ ] **C4/C5** — default Flash-Lite + due test
+- [ ] **C6** — `ResultViewer`: import, componente, prop della coppia, 5 chiamate
+- [ ] **C7** — script `eval` e versione in `package.json`
+- [ ] **D** — `promptLinter` rimosso, nessun riferimento residuo
+- [ ] **E** — versione 1.2.0 nei tre file, CHANGELOG, baseline **svuotata**
+- [ ] **F** — lint, test, typecheck puliti; smoke test dell'harness eseguito
 - [ ] Commit fatto, **nessun push**
 
 ---
 
-## 14. Cosa NON fare
+## Cosa NON fare
 
-- ❌ **Non** aggiungere controlli euristici o "indicativi": solo regole decidibili
+- ❌ **Non** aggiungere controlli euristici al verificatore: solo regole decidibili
   da un parser. Un falso positivo distrugge la fiducia nello strumento — è
   esattamente il difetto del linter che stiamo rimuovendo.
-- ❌ **Non** usare `gemini-flash-latest` o un altro alias mobile nell'harness: i
-  confronti storici perderebbero significato.
-- ❌ **Non** ridurre K sotto 3 senza motivo: con K=1 si misura il rumore.
-- ❌ **Non** trasformare il tasso di conformità in un punteggio di qualità 0-100
-  da mostrare all'utente. Serve a **falsificare** una regola, non a certificarla —
-  e un punteggio LLM-like ci ha già ingannati in passato (87 → 72).
-- ❌ **Non** modificare i testi dei flussi in `app/constants/prompts.ts` in questa
-  modifica: prima si misura, poi si corregge.
-- ❌ **Non** pushare, taggare o pubblicare release senza conferma.
-
----
-
-## 15. Nota sul significato dei numeri
-
-Va tenuto presente, ed è scritto anche nel report generato:
-
-> I numeri servono a **falsificare** una regola, non a certificarla. Una regola
-> al 100% su ~10 casi dice poco; una regola al 60% dice che il meta-prompt non la
-> sta imponendo. Si confronta il **delta** tra due esecuzioni — prima e dopo una
-> modifica ai meta-prompt — non il livello assoluto.
-
-Alla prima esecuzione reale, l'harness ha trovato che il prompt generato per il
-flusso `code` **non citava mai `CLAUDE.md`**, mentre la regola 9 di `FLOW_CODE`
-dichiara *"è OBBLIGATORIO LEGGERLO all'inizio"*. È il tipo di difetto che questo
-strumento esiste per scoprire.
+- ❌ **Non** usare un alias mobile nell'harness (`gemini-flash-latest`): i confronti
+  storici perderebbero significato. L'**app** usa un alias mobile, l'**harness**
+  resta pinnato: sono esigenze opposte e vanno tenute separate.
+- ❌ **Non** ridurre K sotto 3 senza motivo.
+- ❌ **Non** rimuovere il confinamento del backend Claude.
+- ❌ **Non** modificare i testi dei flussi in questa migrazione: prima si misura,
+  poi si corregge.
+- ❌ **Non** pushare, taggare o pubblicare release senza conferma esplicita.
