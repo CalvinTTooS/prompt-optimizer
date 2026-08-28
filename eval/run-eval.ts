@@ -358,6 +358,14 @@ async function main() {
   const jsonFailures: string[] = [];
   let n = 0;
 
+  // A 429 is not a transient hiccup like a dropped connection: within one run it
+  // means "not today". Without this guard an exhausted quota does not produce an
+  // error, it produces a FALSE RESULT — every rule at 0%, which reads as a
+  // catastrophic regression of the product. Happened twice on 2026-08-27/28,
+  // once burning 149 calls' worth of wall time to collect refusals.
+  let consecutiveQuotaErrors = 0;
+  const QUOTA_ABORT_THRESHOLD = 3;
+
   for (const c of cases) {
     for (const flow of c.flows) {
       if (!matches(flow)) continue;
@@ -368,6 +376,7 @@ async function main() {
         try {
           const { text, conformance } = await generateAndCheck(flow, c.input);
           observations.push({ caseId: c.id, flow, rep, text, conformance });
+          consecutiveQuotaErrors = 0;
           const failed = conformance.total - conformance.passed;
           process.stdout.write(failed === 0 ? 'ok\n' : `${conformance.passed}/${conformance.total}\n`);
         } catch (e) {
@@ -382,6 +391,21 @@ async function main() {
           } else {
             errors.push(`${c.id} (${flow}) rep ${rep}: ${msg}`);
             process.stdout.write(`ERRORE: ${msg}\n`);
+
+            if (/\b429\b|quota/i.test(msg)) {
+              consecutiveQuotaErrors += 1;
+              if (consecutiveQuotaErrors >= QUOTA_ABORT_THRESHOLD) {
+                console.error(
+                  `\nInterrotto: ${QUOTA_ABORT_THRESHOLD} errori di quota consecutivi.\n` +
+                    'La quota giornaliera è esaurita o la chiave non è valida. Nessun report\n' +
+                    'scritto: un report parziale di sole violazioni sarebbe un dato falso.\n' +
+                    'Controlla il contatore reale su https://ai.dev/rate-limit prima di riprovare.',
+                );
+                process.exit(2);
+              }
+            } else {
+              consecutiveQuotaErrors = 0;
+            }
           }
         }
       }
