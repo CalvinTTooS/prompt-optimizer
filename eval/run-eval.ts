@@ -23,6 +23,7 @@
 //   EVAL_SLEEP_MS  pacing between calls (default: 13000 for the free tier)
 
 import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { EVAL_CASES, type EvalCase, type EvalFlow } from './prompts';
 import {
@@ -81,6 +82,63 @@ const SLEEP_MS = Number(process.env.EVAL_SLEEP_MS ?? 13000);
 // mode the cost of batching stays invisible.
 const MULTI = process.env.EVAL_MULTI === '1';
 
+// Second backend (EVAL_BACKEND=claude), for a cross-model reading of the SAME
+// meta-prompts. It answers a question one model alone cannot: when a rule scores
+// low, is the rule at fault or the model? Failing on both points at us; failing
+// on one points at the model.
+//
+// Two confounds, declared rather than hidden — this is indicative, not a
+// controlled experiment:
+//  1. No `responseSchema`. Gemini has the JSON shape enforced by the API; Claude
+//     can only be ASKED for it. A malformed reply is therefore a backend
+//     artifact, not a rule violation, and is counted separately.
+//  2. The CLI inherits the user's global output style, so replies may carry
+//     preambles or code fences. Hence the tolerant extraction below.
+const BACKEND = (process.env.EVAL_BACKEND ?? 'gemini') as 'gemini' | 'claude';
+const CLAUDE_MODEL = process.env.EVAL_CLAUDE_MODEL ?? 'sonnet';
+
+class JsonContractError extends Error {}
+
+/**
+ * Spells out the JSON shape that `responseSchema` enforces on the Gemini path.
+ * Derived from the same flags, so the two backends stay in sync by construction.
+ */
+function jsonContract(fields: string[]): string {
+  return `Rispondi esclusivamente con un oggetto JSON valido, senza testo prima o dopo. Campi richiesti (tutti stringhe): ${fields.join(', ')}.`;
+}
+
+/** Runs the prompt through the local `claude` CLI and returns the parsed object. */
+function callClaude<T>(prompt: string): T {
+  const res = spawnSync('claude', ['-p', '--model', CLAUDE_MODEL, '--output-format', 'json'], {
+    input: prompt,
+    encoding: 'utf8',
+    maxBuffer: 32 * 1024 * 1024,
+    shell: true,
+  });
+  if (res.error) throw new Error(`claude non avviabile: ${res.error.message}`);
+  if (res.status !== 0) throw new Error(`claude uscito con codice ${res.status}: ${res.stderr?.slice(0, 200)}`);
+
+  let envelope: { result?: string; is_error?: boolean };
+  try {
+    envelope = JSON.parse(res.stdout);
+  } catch {
+    throw new JsonContractError('envelope del CLI non parsabile');
+  }
+  if (envelope.is_error) throw new Error('il CLI ha segnalato un errore');
+
+  // The reply may be fenced or preceded by prose (inherited output style), so
+  // take the outermost braces rather than trusting the whole string.
+  const raw = envelope.result ?? '';
+  const start = raw.indexOf('{');
+  const end = raw.lastIndexOf('}');
+  if (start < 0 || end <= start) throw new JsonContractError('nessun oggetto JSON nella risposta');
+  try {
+    return JSON.parse(raw.slice(start, end + 1)) as T;
+  } catch {
+    throw new JsonContractError('JSON della risposta non valido');
+  }
+}
+
 const genAI = new GoogleGenerativeAI(API_KEY);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -100,6 +158,17 @@ const FLOW_INSTR: Record<OptFlow, string> = {
   gemini: FLOW_GEMINI_INSTRUCTIONS,
 };
 
+/** The optimizer response shape, shared by both backends. */
+type OptimizerResultLike = {
+  spiegazione?: string;
+  promptChat?: string;
+  promptCowork?: string;
+  promptCode?: string;
+  promptSystem?: string;
+  promptUser?: string;
+  promptGemini?: string;
+};
+
 /** One generated artifact plus its conformance verdict. */
 interface Observation {
   caseId: string;
@@ -111,16 +180,23 @@ interface Observation {
 
 async function generateAndCheck(flow: EvalFlow, input: string): Promise<{ text: string; conformance: ConformanceResult }> {
   if (flow === 'scaffold') {
-    const model = genAI.getGenerativeModel({
-      model: MODEL,
-      generationConfig: { responseMimeType: 'application/json', responseSchema: buildScaffoldSchema() },
-    });
-    const response = await model.startChat().sendMessage([SCAFFOLD_PROGETTO_INSTRUCTIONS, input]);
-    const finishReason = response.response.candidates?.[0]?.finishReason;
-    const { progetto } = parseOptimizerResponse<{ progetto: string }>({
-      text: response.response.text(),
-      finishReason,
-    });
+    let progetto: string;
+    if (BACKEND === 'claude') {
+      ({ progetto } = callClaude<{ progetto: string }>(
+        `${SCAFFOLD_PROGETTO_INSTRUCTIONS}\n\n${jsonContract(['progetto'])}\n\n${input}`,
+      ));
+    } else {
+      const model = genAI.getGenerativeModel({
+        model: MODEL,
+        generationConfig: { responseMimeType: 'application/json', responseSchema: buildScaffoldSchema() },
+      });
+      const response = await model.startChat().sendMessage([SCAFFOLD_PROGETTO_INSTRUCTIONS, input]);
+      const finishReason = response.response.candidates?.[0]?.finishReason;
+      ({ progetto } = parseOptimizerResponse<{ progetto: string }>({
+        text: response.response.text(),
+        finishReason,
+      }));
+    }
     return { text: progetto, conformance: checkScaffoldProject(progetto) };
   }
 
@@ -141,13 +217,28 @@ async function generateAndCheck(flow: EvalFlow, input: string): Promise<{ text: 
     ? (['chat', 'cowork', 'code', 'systemUser', 'gemini'] as OptFlow[]).map((f) => FLOW_INSTR[f])
     : [FLOW_INSTR[flow]];
 
-  const model = genAI.getGenerativeModel({
-    model: MODEL,
-    generationConfig: { responseMimeType: 'application/json', responseSchema: buildResponseSchema(flows) },
-  });
-  const response = await model.startChat().sendMessage([buildOptimizerSystemInstruction(tasks), input]);
-  const finishReason = response.response.candidates?.[0]?.finishReason;
-  const parsed = parseOptimizerResponse({ text: response.response.text(), finishReason });
+  const instruction = buildOptimizerSystemInstruction(tasks);
+
+  let parsed: OptimizerResultLike;
+  if (BACKEND === 'claude') {
+    // Field names mirror buildResponseSchema, so the contract asked of Claude
+    // matches the shape the Gemini schema enforces.
+    const fields = ['spiegazione'];
+    if (flows.genChat) fields.push('promptChat');
+    if (flows.genCowork) fields.push('promptCowork');
+    if (flows.genCode) fields.push('promptCode');
+    if (flows.genSystemUser) fields.push('promptSystem', 'promptUser');
+    if (flows.genGemini) fields.push('promptGemini');
+    parsed = callClaude<OptimizerResultLike>(`${instruction}\n\n${jsonContract(fields)}\n\n${input}`);
+  } else {
+    const model = genAI.getGenerativeModel({
+      model: MODEL,
+      generationConfig: { responseMimeType: 'application/json', responseSchema: buildResponseSchema(flows) },
+    });
+    const response = await model.startChat().sendMessage([instruction, input]);
+    const finishReason = response.response.candidates?.[0]?.finishReason;
+    parsed = parseOptimizerResponse({ text: response.response.text(), finishReason });
+  }
 
   switch (flow) {
     case 'chat':
@@ -226,12 +317,14 @@ async function main() {
   const total = cases.reduce((s, c) => s + c.flows.filter(matches).length, 0) * REPS;
 
   const mode = MULTI ? 'multi-flusso (5 formati per chiamata)' : 'flusso singolo';
-  console.log(`Modello: ${MODEL} · Modalità: ${mode}`);
+  const engine = BACKEND === 'claude' ? `claude CLI (${CLAUDE_MODEL})` : MODEL;
+  console.log(`Backend: ${BACKEND} · Modello: ${engine} · Modalità: ${mode}`);
   console.log(`Casi: ${cases.length} · Ripetizioni: ${REPS} · Chiamate: ${total}`);
   console.log(`Stima: ~${Math.round((total * SLEEP_MS) / 60000)} minuti\n`);
 
   const observations: Observation[] = [];
   const errors: string[] = [];
+  const jsonFailures: string[] = [];
   let n = 0;
 
   for (const c of cases) {
@@ -248,8 +341,17 @@ async function main() {
           process.stdout.write(failed === 0 ? 'ok\n' : `${conformance.passed}/${conformance.total}\n`);
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
-          errors.push(`${c.id} (${flow}) rep ${rep}: ${msg}`);
-          process.stdout.write(`ERRORE: ${msg}\n`);
+          // A malformed reply is a BACKEND artifact, not a rule violation:
+          // without responseSchema the JSON shape is merely requested. Mixing
+          // the two would make the Claude backend look non-conformant when it
+          // is only being verbose.
+          if (e instanceof JsonContractError) {
+            jsonFailures.push(`${c.id} (${flow}) rep ${rep}: ${msg}`);
+            process.stdout.write(`JSON non conforme: ${msg}\n`);
+          } else {
+            errors.push(`${c.id} (${flow}) rep ${rep}: ${msg}`);
+            process.stdout.write(`ERRORE: ${msg}\n`);
+          }
         }
       }
     }
@@ -271,12 +373,15 @@ async function main() {
     }
   }
   if (errors.length) console.log(`\n${errors.length} chiamate fallite (vedi il report).`);
+  if (jsonFailures.length) {
+    console.log(`${jsonFailures.length} risposte con JSON non conforme — artefatto del backend, non violazioni di regola.`);
+  }
 
   // --- markdown report, with the evidence for every failure ---
   const lines: string[] = [
     '# Eval di conformità',
     '',
-    `Modello: \`${MODEL}\` · Modalità: **${mode}** · Casi: ${cases.length} · Ripetizioni: ${REPS} · Avvio: ${started.toISOString()}`,
+    `Backend: **${BACKEND}** · Modello: \`${engine}\` · Modalità: **${mode}** · Casi: ${cases.length} · Ripetizioni: ${REPS} · Avvio: ${started.toISOString()}`,
     '',
     '> I numeri servono a **falsificare** una regola, non a certificarla. Confronta il',
     '> **delta** tra due esecuzioni (prima/dopo una modifica ai meta-prompt), non il livello.',
@@ -300,6 +405,17 @@ async function main() {
   if (errors.length) {
     lines.push('', '## Chiamate fallite', '', ...errors.map((e) => `- ${e}`));
   }
+  if (jsonFailures.length) {
+    lines.push(
+      '',
+      '## Risposte con JSON non conforme',
+      '',
+      '> Artefatto del **backend**, non violazioni di regola: senza `responseSchema` la',
+      '> forma JSON è solo richiesta, non imposta. Contate a parte per non falsare il confronto.',
+      '',
+      ...jsonFailures.map((e) => `- ${e}`),
+    );
+  }
 
   lines.push('', '---', '', '## Prompt generati', '');
   for (const obs of observations) {
@@ -317,7 +433,7 @@ async function main() {
   const stamp = started.toISOString().replace(/[:.]/g, '-');
   // The mode is in the filename: comparing a single-flow run against a
   // multi-flow one is the whole point, and mixing them up would invalidate it.
-  const suffix = MULTI ? 'multi' : 'single';
+  const suffix = `${BACKEND}-${MULTI ? 'multi' : 'single'}`;
   const path = `eval/output/eval-${suffix}-${stamp}.md`;
   writeFileSync(path, lines.join('\n'));
   writeFileSync(`eval/output/latest-${suffix}.md`, lines.join('\n'));
