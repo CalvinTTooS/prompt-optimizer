@@ -183,7 +183,39 @@ La raccomandazione di Google per la famiglia Gemini 3.x (*"we strongly recommend
 keeping them at their default values"*) **vale anche sul nostro caso**, e in più
 allinea la misura al sistema reale. Nessun motivo di tornare indietro.
 
-### L'unica metrica ancora aperta
+### ✅ Chiusa il 2026-08-28 — era un difetto del CHECK (il terzo)
+
+`gemini.concreteCommands` era al 67%. **Tutti e dieci i fallimenti erano falsi
+positivi.** Il file "non conforme" conteneva:
+
+```
+## Build & Test Commands
+- Build: cargo build --release
+- Test: cargo test
+- Lint: cargo clippy --all-targets --all-features -- -D warnings
+```
+
+Comandi concreti ed eseguibili — semplicemente **non racchiusi in backtick**, che
+il check pretendeva. Ma la regola dice *"dai il comando concreto ed eseguibile
+(es. `npm test`)"*: **i backtick sono nell'esempio, non nel requisito.** Il check
+misurava la conformità a una regola mai scritta — lo stesso errore diagnosticato
+in L3, commesso stavolta dal verificatore.
+
+**Ri-valutato l'archivio della run 12 col check corretto: 30/30, 100%.** Nessuna
+chiamata all'API: generazione e valutazione sono separate, quindi correggere il
+valutatore e riapplicarlo alle generazioni archiviate è deterministico e gratuito.
+
+**Nuovo totale della run 12: 959/960 — 99,9%.** Resta un solo fallimento
+(`gemini.noGenericPhrases`, 29/30, una osservazione).
+
+> ⚠️ **Conclusione da ritirare.** La sonda cross-modello (run 8) aveva concluso
+> *"il problema è la regola, non il modello"*. **Era sbagliata anch'essa**: il
+> problema era il **check**. Claude sembrava migliore (91% contro 79%) solo
+> perché usa i backtick più spesso — non perché desse comandi migliori. Due
+> analisi consecutive su questa metrica hanno accusato l'oggetto sbagliato prima
+> che qualcuno leggesse il testo generato.
+
+### Storico della metrica, ora chiusa
 
 `gemini.concreteCommands` resta al **67%**, stabile fra le run (70% → 67%,
 differenza di una osservazione). La sonda cross-modello ha già indicato che il
@@ -208,10 +240,42 @@ robustezza. **È il modo raccomandato di eseguire una run completa.**
 
 ## Come registrare una run futura
 
-1. `npm run eval` (oppure `EVAL_MULTI=1 npm run eval` per la modalità multi-flusso)
+1. Eseguire **a blocchi**, un flusso per volta (`EVAL_FLOW=<flusso>` in sequenza):
+   ogni segmento dura 4-12 minuti e scrive il proprio report appena finisce, quindi
+   un'interruzione costa al massimo il segmento in corso. Tre run intere sono
+   andate perse prima di adottare questa abitudine.
 2. Copiare qui la tabella dei tassi, con commit, modello, modalità e data
 3. Annotare il **delta** rispetto alla run precedente e la modifica che l'ha causato
-4. Verificare le prove delle nuove violazioni in `eval/output/latest-*.md` **prima**
-   di dichiararle reperti: un tasso basso può essere un difetto del checker, non
-   del meta-prompt. È già successo (falso positivo su `code.noPlaceholders`,
-   corretto il 2026-08-27).
+4. **Leggere il testo generato prima di dichiarare un reperto.** Non le
+   percentuali: il testo. Un tasso basso è stato **tre volte su tre** un difetto
+   del *verificatore*, non del prodotto:
+   - `code.noPlaceholders` — segnalava i segnaposto **citati per vietarli**
+   - `anon.intact` — il vecchio linter segnalava i segnaposto di anonimizzazione,
+     che sono output **corretto**
+   - `gemini.concreteCommands` — pretendeva i backtick, che la regola non chiede
+
+   Il costo di leggere tre output è di due minuti. Il costo di non leggerli è
+   "correggere" un meta-prompt sano, e nel caso di `concreteCommands` sono state
+   **due analisi consecutive** ad accusare l'oggetto sbagliato — inclusa una sonda
+   cross-modello da trenta chiamate.
+
+5. **Verificare che il check corrisponda alla regola COME È SCRITTA**, non
+   all'intenzione che gli attribuiamo. Se la regola dice *"comando concreto (es.
+   `npm test`)"*, l'esempio non è il requisito: pretendere i backtick significa
+   misurare una regola che non esiste. Se li vogliamo davvero, si scrivono nella
+   regola — è la lezione di L3 applicata al verificatore.
+
+6. **Controllare COME si distribuiscono le osservazioni mancanti**, non solo
+   quante sono. Chiamate fallite, troncamenti e risposte fuori contratto non sono
+   rumore uniforme: se si concentrano sui casi difficili, il tasso che resta è
+   **gonfiato** e il confronto è invalido anche se i numeri sembrano sani. È già
+   successo due volte — 51 chiamate perse in blocco su un solo flusso, e 7
+   risposte fuori contratto tutte sui casi ostici. Quando accade, ricalcolare
+   **sul sottoinsieme comune** invece di confrontare i totali.
+
+7. **Un cambiamento al verificatore invalida la baseline della metrica toccata**,
+   non delle altre. Registrarlo esplicitamente: con lo strumento nuovo il numero
+   vecchio non è più confrontabile. Se serve il nuovo valore subito, **ri-valutare
+   gli output archiviati** in `eval/output/` invece di rigenerarli: generazione e
+   valutazione sono separate, quindi correggere il check e riapplicarlo
+   all'archivio è deterministico e **non consuma quota**.

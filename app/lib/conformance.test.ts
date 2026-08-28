@@ -231,6 +231,25 @@ Usa TypeScript strict.`;
     expect(passed(r, 'gemini.concreteCommands')).toBe(false);
   });
 
+  // The rule asks for a command that is concrete and runnable; the backticks in
+  // its example are illustration, not requirement. This exact shape was produced
+  // by Gemini and wrongly reported as a violation before the fix.
+  it('accepts concrete commands written without backticks', () => {
+    const r = checkGemini(
+      ['## Build & Test Commands', '', '- Build: cargo build --release', '- Test: cargo test'].join('\n'),
+    );
+    expect(passed(r, 'gemini.concreteCommands')).toBe(true);
+  });
+
+  // Prose has the same "word word" shape as a bare command, so outside
+  // backticks only a known runner counts — otherwise every sentence passes.
+  it('does not mistake prose for a bare command', () => {
+    const r = checkGemini(
+      ['## Stile', '', '- Follow standard guidelines.', '- Ensure zero warnings before committing.'].join('\n'),
+    );
+    expect(passed(r, 'gemini.concreteCommands')).toBe(false);
+  });
+
   it('flags the generic phrases the rule names explicitly', () => {
     const r = checkGemini(`${good}\n\nScrivi codice pulito.`);
     expect(passed(r, 'gemini.noGenericPhrases')).toBe(false);

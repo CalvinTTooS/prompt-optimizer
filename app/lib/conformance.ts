@@ -335,8 +335,34 @@ const SELF_REFERENCE_RE = /\b(?:quest[oa]|il presente|in questo)\s+(?:file\s+)?G
 // Rule 4 names these as the anti-pattern to avoid ("MAI frasi generiche").
 const GENERIC_PHRASE_RE = /scriv\w+ codice pulito|testa le tue modifiche|segui le best practice\b/i;
 
-// A concrete command: a runner plus at least one argument, inside backticks.
+// Rule 5 asks for a "comando concreto ed eseguibile (es. `npm test`)". The
+// backticks are in the EXAMPLE, not in the requirement — an earlier version of
+// this check demanded them and reported perfectly good files as violations:
+//
+//     ## Build & Test Commands
+//     - Build: cargo build --release
+//     - Test: cargo test
+//
+// Two ways to recognise a command, and both must be accepted:
+//  1. inside backticks, where the fences already declare "this is code", so a
+//     generic runner-plus-argument shape is enough;
+//  2. in plain prose, where that shape is indistinguishable from ordinary text
+//     ("follow standard guidelines" has it too) — so we require a known runner.
+//     A whitelist is narrow by design: a missed runner costs one false negative,
+//     a loose pattern costs trust in every number the harness produces.
 const COMMAND_IN_BACKTICKS_RE = /`[a-z][\w.-]*(?:\s+[\w.:/@=-]+)+`/;
+
+const KNOWN_RUNNERS = [
+  'npm', 'pnpm', 'yarn', 'bun', 'npx', 'node', 'deno',
+  'cargo', 'rustc', 'clippy',
+  'go', 'make', 'cmake', 'gradle', 'mvn', 'dotnet', 'swift',
+  'python', 'python3', 'uv', 'pip', 'poetry', 'pytest', 'ruff', 'black', 'mypy', 'tox',
+  'tsc', 'vitest', 'jest', 'eslint', 'prettier', 'biome',
+  'docker', 'kubectl', 'terraform',
+  'ruby', 'bundle', 'rake', 'composer', 'php', 'dart', 'flutter',
+].join('|');
+
+const BARE_COMMAND_RE = new RegExp(`\\b(?:${KNOWN_RUNNERS})\\s+[\\w.:/@=-]+`, 'i');
 
 export function checkGemini(text: string): ConformanceResult {
   const checks: ConformanceCheck[] = [];
@@ -354,11 +380,11 @@ export function checkGemini(text: string): ConformanceResult {
       : ko('gemini.headings', 'Struttura in heading Markdown', 'nessun heading "## "'),
   );
 
-  const command = firstMatch(text, COMMAND_IN_BACKTICKS_RE);
+  const command = firstMatch(text, COMMAND_IN_BACKTICKS_RE) ?? firstMatch(text, BARE_COMMAND_RE);
   checks.push(
     command
-      ? ok('gemini.concreteCommands', 'Contiene almeno un comando concreto in backtick')
-      : ko('gemini.concreteCommands', 'Contiene almeno un comando concreto in backtick', 'nessun comando trovato'),
+      ? ok('gemini.concreteCommands', 'Contiene almeno un comando concreto ed eseguibile')
+      : ko('gemini.concreteCommands', 'Contiene almeno un comando concreto ed eseguibile', 'nessun comando trovato'),
   );
 
   const generic = firstMatch(text, GENERIC_PHRASE_RE);
