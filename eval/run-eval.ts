@@ -22,7 +22,9 @@
 //   EVAL_ONLY      run only these case ids, comma-separated
 //   EVAL_SLEEP_MS  pacing between calls (default: 13000 for the free tier)
 
-import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
+import { writeFileSync, mkdirSync, readFileSync, existsSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { EVAL_CASES, type EvalCase, type EvalFlow } from './prompts';
@@ -107,14 +109,43 @@ function jsonContract(fields: string[]): string {
   return `Rispondi esclusivamente con un oggetto JSON valido, senza testo prima o dopo. Campi richiesti (tutti stringhe): ${fields.join(', ')}.`;
 }
 
+// ⚠️ CONTAINMENT — do not remove, and do not "simplify" by dropping the cwd.
+//
+// The CLI is a full coding agent, not a text endpoint. On 2026-08-28 an
+// unrestricted run took three eval inputs literally and DID them: it created
+// `docs/TESTING.md`, registered it in `CLAUDE.md` and rewrote `CONTRIBUTING.md`
+// — inside the repository it was supposed to be measuring. Those replies then
+// showed up as "malformed JSON", because the agent had gone off to work instead
+// of answering.
+//
+// A benchmark must never be able to modify the system under test. Three layers,
+// in increasing order of reliability:
+//  1. `--restricted`      drops the code-running tools
+//  2. `--disallowed-tools` names the file-writing ones explicitly
+//  3. a throwaway cwd     the decisive one: whatever survives 1 and 2 can only
+//                         reach an empty temp directory, never the repo
+const CLAUDE_SANDBOX = mkdtempSync(join(tmpdir(), 'eval-claude-'));
+const CLAUDE_BLOCKED_TOOLS = 'Edit Write NotebookEdit Bash PowerShell WebFetch Task';
+
 /** Runs the prompt through the local `claude` CLI and returns the parsed object. */
 function callClaude<T>(prompt: string): T {
-  const res = spawnSync('claude', ['-p', '--model', CLAUDE_MODEL, '--output-format', 'json'], {
-    input: prompt,
-    encoding: 'utf8',
-    maxBuffer: 32 * 1024 * 1024,
-    shell: true,
-  });
+  const res = spawnSync(
+    'claude',
+    [
+      '-p',
+      '--model', CLAUDE_MODEL,
+      '--output-format', 'json',
+      '--restricted',
+      '--disallowed-tools', CLAUDE_BLOCKED_TOOLS,
+    ],
+    {
+      input: prompt,
+      encoding: 'utf8',
+      maxBuffer: 32 * 1024 * 1024,
+      shell: true,
+      cwd: CLAUDE_SANDBOX,
+    },
+  );
   if (res.error) throw new Error(`claude non avviabile: ${res.error.message}`);
   if (res.status !== 0) throw new Error(`claude uscito con codice ${res.status}: ${res.stderr?.slice(0, 200)}`);
 
