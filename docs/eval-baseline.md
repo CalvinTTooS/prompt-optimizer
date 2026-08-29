@@ -6,6 +6,26 @@ riproducibili rilanciando l'harness, e restano gitignorati. I *tassi misurati in
 una certa data con un certo codice*, invece, non sono riproducibili — e stanno in
 venti righe.
 
+> ## 🔒 Il verificatore è CONGELATO — decisione del 2026-08-29
+>
+> Nessuna modifica ai check finché non sono chiusi i punti ancora aperti
+> dell'audit (L4, L5, L10). **Non si cambia il metro mentre si misura**: con uno
+> strumento diverso il delta di una correzione diventerebbe indistinguibile dal
+> delta dello strumento.
+>
+> **Riferimento congelato**: run 12 ri-valutata, commit `11f7b00` —
+> **959/960, 99,9%**, unico fallimento `gemini.noGenericPhrases` (29/30).
+>
+> Alla fine dei lavori va deciso **se tenere il verificatore, e in che forma**.
+> La questione è aperta e ha argomenti seri da entrambe le parti: ha trovato tre
+> difetti reali che mesi di riletture non avevano visto, ma ha anche prodotto
+> tre falsi positivi — **tutti dai 4 check "interpretativi"** (`concreteCommands`,
+> `noGenericPhrases`, `noUserQuestions`, `noDuplication`), che violano il criterio
+> dichiarato di questo strumento: *solo regole decidibili da un parser*. I 12
+> check strutturali non ne hanno mai prodotto uno. E va considerato che, al 99,9%,
+> il potere informativo residuo è ormai scarso: da qui in avanti è una rete di
+> regressione, non uno strumento di scoperta.
+
 **Come si legge.** I numeri servono a **falsificare** una regola, non a
 certificarla: una regola al 100% su ~10 casi dice poco, una al 76% dice che il
 meta-prompt non la sta imponendo. Si confronta il **delta** tra due esecuzioni,
