@@ -88,6 +88,8 @@ ${examplesBlock}
 
       Vincolo comune a tutti i flussi — segnaposto: riporta i segnaposto di anonimizzazione (es. [EMAIL_X], [TELEFONO_X]) esattamente come li ricevi. Sostituiscono dati personali dell'utente e vengono ripristinati dopo la generazione: un segnaposto alterato non è più riconoscibile e il dato originale va perso.
 
+      Vincolo comune a tutti i flussi — dati variabili: quando il prompt contiene un dato che cambierebbe rieseguendo il task domani (un nome, una data, un testo da elaborare), mettilo come segnaposto nella forma {{NOME_DESCRITTIVO}} invece di fissarne il valore. È lo stesso criterio dello split System/User. L'utente compila i segnaposto in un modulo prima di usare il prompt, e la forma conta: le doppie graffe non si confondono con i link Markdown né con gli indici negli esempi di codice. Se invece il prompt non contiene dati variabili, non inventarne.
+
       Vincolo comune a tutti i flussi — leggibilità: separa con una riga vuota le sezioni di primo livello, sia i tag (es. <role>, <context>, <output_format>) sia gli heading Markdown, tenendo ogni tag sulla propria riga. Il prompt generato viene letto e modificato a mano dall'utente, quindi la spaziatura è parte del risultato.
 
       Nel campo "spiegazione" descrivi brevemente le migliorie apportate, riferendole ai formati richiesti.`;

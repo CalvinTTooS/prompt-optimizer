@@ -24,24 +24,11 @@ import { buildExamplesBlock, EMPTY_EXAMPLES, type SingleExample } from '../lib/f
 // already depend on, keeping the single source of truth in lib/promptOptimizer.
 export type { OptimizerResult };
 
-function computeInitialVariables(parsed: OptimizerResult): Record<string, string> {
-  const allText =
-    (parsed.promptChat || '') +
-    ' ' +
-    (parsed.promptCowork || '') +
-    ' ' +
-    (parsed.promptCode || '') +
-    ' ' +
-    (parsed.promptSystem || '') +
-    ' ' +
-    (parsed.promptUser || '') +
-    ' ' +
-    (parsed.promptGemini || '');
-  const matches = allText.match(/\[(?!EMAIL|TELEFONO|CARTA|CCV|MANUALE).*?\]/g);
-  const initialVars: Record<string, string> = {};
-  matches?.forEach((m) => (initialVars[m] = ''));
-  return initialVars;
-}
+// NOTE: the set of fill-in fields is no longer snapshotted here. It used to be
+// computed once from the first result, which meant a prompt refined afterwards
+// could contain placeholders the form never offered — the user had to edit them
+// by hand. The fields are now derived from the CURRENT texts where they are
+// displayed (see ResultViewer); this hook only holds the values the user typed.
 
 /** Prompt-editing, PII anonymization, and Gemini optimization for the current API key/model. */
 export function usePromptOptimizer(apiKey: string, selectedModel: string) {
@@ -167,7 +154,8 @@ export function usePromptOptimizer(apiKey: string, selectedModel: string) {
 
       const parsed = parseOptimizerResponse({ text: response.response.text(), finishReason }) as OptimizerResult;
       setResult(parsed);
-      setVariables(computeInitialVariables(parsed));
+      // Clear the typed values: they belonged to the previous prompt's fields.
+      setVariables({});
     } catch (error) {
       const message = error instanceof Error ? error.message : undefined;
       logger.error(`Dettaglio Errore: ${error}`);

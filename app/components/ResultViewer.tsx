@@ -11,6 +11,7 @@ import {
   checkSystemUser,
   type ConformanceResult,
 } from '../lib/conformance';
+import { extractPlaceholders } from '../lib/placeholders';
 import { toast } from '../lib/toast';
 import { useT } from '../hooks/useT';
 
@@ -291,7 +292,29 @@ export function ResultViewer({
       : getCleanedPrompt(original);
   };
 
+  // Fill-in fields are derived from the RAW texts, originals and refined alike,
+  // not from the displayed ones: `shownText` has already substituted whatever the
+  // user typed, so deriving from it would make a field vanish the moment it was
+  // filled. Including the refined variants is the point — refining rewrites the
+  // prompt, and its placeholders used to be unreachable from this form.
+  const rawVariantTexts = (['promptChat', 'promptCowork', 'promptCode', 'promptGemini'] as const).flatMap(
+    (id) => {
+      const s = refineStateFor(id);
+      return [result[id], s.status === 'done' ? s.result.refined : undefined];
+    },
+  );
   const pair = refinePairState();
+  const rawPairTexts =
+    pair.status === 'done'
+      ? [pair.result.refinedSystem, pair.result.refinedUser]
+      : [];
+  const variableKeys = extractPlaceholders([
+    ...rawVariantTexts,
+    result.promptSystem,
+    result.promptUser,
+    ...rawPairTexts,
+  ]);
+
   const shownSystem = () => pair.status === 'done' && pair.view === 'claude'
     ? getCleanedPrompt(pair.result.refinedSystem) : getCleanedPrompt(result.promptSystem);
   const shownUser = () => pair.status === 'done' && pair.view === 'claude'
@@ -304,14 +327,14 @@ export function ResultViewer({
         <p className="text-gray-700 italic leading-relaxed">&quot;{result.spiegazione}&quot;</p>
       </div>
 
-      {Object.keys(variables).length > 0 && (
+      {variableKeys.length > 0 && (
         <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm">
           <h2 className="font-black text-gray-900 mb-6 text-sm uppercase tracking-widest">{t('result.fillVariables')}</h2>
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-            {Object.keys(variables).map((key) => (
+            {variableKeys.map((key) => (
               <div key={key}>
                 <label className="block text-[10px] font-black text-gray-400 uppercase mb-2 ml-1">{key}</label>
-                <input type="text" className="w-full p-3 border-2 border-gray-50 rounded-xl bg-gray-50 focus:border-blue-400 outline-none text-sm" value={variables[key]} onChange={(e) => onVariableChange(key, e.target.value)} />
+                <input type="text" className="w-full p-3 border-2 border-gray-50 rounded-xl bg-gray-50 focus:border-blue-400 outline-none text-sm" value={variables[key] ?? ''} onChange={(e) => onVariableChange(key, e.target.value)} />
               </div>
             ))}
           </div>

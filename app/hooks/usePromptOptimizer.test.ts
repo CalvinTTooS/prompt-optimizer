@@ -133,17 +133,40 @@ describe('usePromptOptimizer', () => {
     expect(sendMessage).toHaveBeenCalledWith(expect.arrayContaining([expect.stringContaining('contattami a me@example.com')]));
   });
 
-  test('sets the result and derives fill-in variables from unresolved placeholders', async () => {
-    parseOptimizerResponse.mockReturnValue({ spiegazione: 'ok', promptChat: 'Ciao [NOME], benvenuto.' });
+  // The hook no longer snapshots the fill-in fields: they are derived from the
+  // CURRENT texts where they are displayed, so a prompt refined afterwards
+  // contributes its own placeholders too (see lib/placeholders). Here the hook
+  // only has to store the result and drop values typed for the previous prompt.
+  test('sets the result and clears the values typed for the previous prompt', async () => {
+    parseOptimizerResponse.mockReturnValue({ spiegazione: 'ok', promptChat: 'Ciao {{NOME}}, benvenuto.' });
     const { result } = renderHook(() => usePromptOptimizer('sk-key', 'gemini-flash'));
     act(() => result.current.setInput('un prompt qualsiasi'));
+    act(() => result.current.setVariables({ '{{VECCHIO}}': 'valore di prima' }));
 
     await act(async () => {
       await result.current.handleOptimize();
     });
 
-    expect(result.current.result).toEqual({ spiegazione: 'ok', promptChat: 'Ciao [NOME], benvenuto.' });
-    expect(result.current.variables).toEqual({ '[NOME]': '' });
+    expect(result.current.result).toEqual({ spiegazione: 'ok', promptChat: 'Ciao {{NOME}}, benvenuto.' });
+    expect(result.current.variables).toEqual({});
+  });
+
+  // Substitution still has to work for whatever the user typed, in either form.
+  test('sostituisce i segnaposto compilati, in entrambe le convenzioni', async () => {
+    parseOptimizerResponse.mockReturnValue({
+      spiegazione: 'ok',
+      promptChat: 'Ciao {{NOME}}, vedi [ARGOMENTO].',
+    });
+    const { result } = renderHook(() => usePromptOptimizer('sk-key', 'gemini-flash'));
+    act(() => result.current.setInput('un prompt qualsiasi'));
+    await act(async () => {
+      await result.current.handleOptimize();
+    });
+    act(() => result.current.setVariables({ '{{NOME}}': 'Marco', '[ARGOMENTO]': 'la fotosintesi' }));
+
+    expect(result.current.getCleanedPrompt(result.current.result?.promptChat)).toBe(
+      'Ciao Marco, vedi la fotosintesi.',
+    );
   });
 
   test('surfaces a friendly error via toast and logs the detail on failure', async () => {
