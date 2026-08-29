@@ -258,6 +258,106 @@ robustezza. **È il modo raccomandato di eseguire una run completa.**
 
 ---
 
+## Run 13 — 2026-08-29 · verifica di L5 (segnaposto unificati)
+
+| | |
+|---|---|
+| Commit misurato | `1d73162` |
+| Modello | `gemini-3.5-flash-lite` (fissato) |
+| Impronta | `gemini-3.5-flash-lite\|reps=3\|multi=0\|prompts=d46d184679ef` |
+| Modalità | flusso singolo · a blocchi · **con ripresa da checkpoint** |
+| Corpus | 66 casi · K=3 · **191 osservazioni** · 939 controlli |
+| Esito | **938/939 superati (99,9%)** |
+
+**Cosa è cambiato rispetto alla run 12**: il meta-prompt comune ha un vincolo in
+più — i dati variabili vanno resi come segnaposto `{{...}}`. È l'unica modifica.
+
+### Tassi per regola
+
+| Flusso | Regola | Conformi | % |
+|---|---|---|---|
+| chat | tutte e 4 | 42/42 | **100%** |
+| code | tutte e 10 | 30/30 | **100%** |
+| cowork | tutte e 4 | 24/24 | **100%** |
+| systemUser | tutte e 3 | 47/47 | **100%** |
+| gemini | 5 su 6 | 30/30 | **100%** |
+| gemini | `concreteCommands` | 29/30 | 97% |
+| scaffold | tutte e 3 | 18/18 | **100%** |
+
+**29 combinazioni regola×flusso su 30 sono al 100%. Zero regressioni.**
+
+`systemUser` conta 47 osservazioni invece di 54: sette chiamate hanno ricevuto
+**500/503 dal server di Google**, non un rifiuto di quota. Da qui l'aggiunta del
+ritento sui transitori (vedi sotto).
+
+### L'adozione dei segnaposto, misurata
+
+La domanda vera di L5 non era "ci sono regressioni" ma "il modello applica il
+vincolo, e lo applica **dove serve**". La distribuzione risponde da sola:
+
+| Flusso | Con `{{...}}` | Perché ha senso |
+|---|---|---|
+| systemUser | 46/47 · **98%** | è la definizione stessa del formato: il campo User *è* il dato variabile |
+| cowork | 18/24 · 75% | task su documenti e codice forniti dall'utente |
+| chat | 16/42 · 38% | metà dei casi sono domande generiche, senza dati |
+| gemini | 4/30 · 13% | file di istruzioni: quasi mai contengono dati |
+| code | 3/30 · 10% | idem |
+| scaffold | 0/18 · **0%** | istruzioni di progetto pure |
+| **totale** | **87/191 · 46%** | |
+
+Il gradiente da 98% a 0% segue la **presenza reale di dati variabili**, non un
+riflesso meccanico. La clausola "se non ce ne sono, non inventarne" funziona.
+
+### 🔴 Reperto nuovo: il meta-prompt trapela nell'output
+
+**3 osservazioni su 191 (1,6%)** contengono non un segnaposto, ma **la regola che
+lo introduce**, riscritta come direttiva da consegnare all'utente finale:
+
+> `- Usa la sintassi {{NOME_DESCRITTIVO}} per qualsiasi dato variabile che cambia ad ogni esecuzione.`
+> — `sysusr-tabella-piu-elenco`
+
+> `Usa segnaposto nella forma {{NOME_DESCRITTIVO}} per i dati variabili e mantieni
+> rigorosamente inalterati eventuali segnaposto di anonimizzazione come [EMAIL_X] o [TELEFONO_X].`
+> — `sysusr-solo-json`
+
+Il secondo caso è quello istruttivo: **trapela anche il vincolo di
+anonimizzazione**, che esiste da mesi. Il difetto non è quindi il token
+`{{NOME_DESCRITTIVO}}` scelto male — è che i blocchi "Vincolo comune a tutti i
+flussi" possono essere riemessi come contenuto, chiunque sia il vincolo.
+
+Causa radice: istruzioni e input arrivano al modello come **due parti dello
+stesso turno** (`sendMessage([systemInstruction, input])`), quindi nulla nella
+struttura distingue ciò che va eseguito da ciò che va consegnato. Si chiude con
+**L4**, non ritoccando un esempio. Nessun check lo intercetta oggi.
+
+### Modifiche all'harness (misuratore, non misurato)
+
+Non alterano l'impronta e non invalidano nessuna baseline.
+
+- **Ripresa da checkpoint**: il parziale viene riletto all'avvio e le
+  osservazioni già acquisite sono saltate. Nasce dopo **sei interruzioni** del
+  processo in background nella stessa giornata, tutte senza errori applicativi e
+  senza causa individuabile dall'interno. Un'interruzione ora costa **una**
+  chiamata invece dell'intero blocco.
+- **Impronta della configurazione**: la ripresa avviene solo a parità di
+  backend, modello, ripetizioni e **hash SHA-256 del testo dei meta-prompt**.
+  Modificare un `FLOW_*` a metà blocco e riprendere fonderebbe due prompt diversi
+  in un solo report, senza alcun segnale. Ora il checkpoint viene rifiutato.
+- **Ritento sui transitori**: 500/502/503/504 vengono ritentati due volte con
+  attesa crescente; il **429 no**, deliberatamente — dentro una run significa
+  "non oggi", e insistere brucia il budget di pacing senza mai riuscire.
+- **Checkpoint conservato se restano buchi**: arrivare all'ultimo caso non
+  equivale a essere completi. Con fallimenti residui il checkpoint sopravvive,
+  così un rilancio riempie solo le lacune.
+- **Pre-flight sulla quota**: registro locale (`_quota-<data>.json`) confrontato
+  con `EVAL_DAILY_CAP` (500), uscita con codice 2 se il fabbisogno eccede,
+  scavalcabile con `EVAL_IGNORE_QUOTA=1`. **È un conteggio locale, non una
+  lettura di Google**: l'SDK non espone le richieste residue, e le chiamate fatte
+  dall'app desktop non sono visibili qui — il numero è una stima per difetto. Il
+  dato autoritativo si legge in Google AI Studio.
+
+---
+
 ## Come registrare una run futura
 
 1. Eseguire **a blocchi**, un flusso per volta (`EVAL_FLOW=<flusso>` in sequenza):

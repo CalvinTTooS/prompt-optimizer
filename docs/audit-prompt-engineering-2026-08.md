@@ -90,19 +90,19 @@ nei **parametri API** invece che nel testo.
 
 ---
 
-## Stato dei dieci punti — aggiornato al 2026-08-27
+## Stato dei dieci punti — aggiornato al 2026-08-29
 
 | | Difetto | Stato |
 |---|---|---|
 | L1 | Ottimizziamo senza misurare | ✅ **chiuso** — harness, 66 casi, baseline versionata |
-| L2 | Costo del batching multi-formato | ⚠️ **riformulato** — modalità pronta, run da fare |
+| L2 | Costo del batching multi-formato | ✅ **chiuso** — modalità a flusso singolo, misurata |
 | L3 | Stile enfatico | ✅ **chiuso** — esito opposto al previsto |
-| L4 | Input non delimitato + `systemInstruction` nativo | ❌ aperto |
-| L5 | Due dialetti di segnaposto | ⚠️ metà — falso warning rimosso, disallineamento resta |
-| L6 | Scheda CoT in-app superata | ❌ aperto |
+| L4 | Input non delimitato + `systemInstruction` nativo | ❌ aperto — **il più promettente** |
+| L5 | Due dialetti di segnaposto | ⚠️ implementato, **misurato su 3 flussi su 5** (run 13) |
+| L6 | Scheda CoT in-app superata | ✅ **chiuso** |
 | L7 | Linter che contraddice i flussi | ✅ **chiuso** |
-| L8 | Few-shot duplicato e incondizionato | ❌ aperto |
-| L9 | `temperature: 0.5` su Gemini 3.x | ❌ aperto — **priorità salita** |
+| L8 | Few-shot duplicato e incondizionato | ✅ **chiuso** — iniettato una volta sola |
+| L9 | `temperature: 0.5` su Gemini 3.x | ✅ **chiuso** — parametro rimosso |
 | L10 | "Spiegazione" non verificabile | ❌ aperto |
 
 **Perché L9 è ora prioritario**: non è più solo una raccomandazione di Google, è
@@ -366,6 +366,57 @@ punto del prompt su cui agisce la renderebbe controllabile a costo quasi nullo.
 Il punto **9** è l'unico che cambia la natura del prodotto: trasformerebbe Prompt Optimizer
 da *generatore di varianti plausibili* a *strumento che dimostra il miglioramento*. È anche
 l'unico differenziatore che nessuno dei tool concorrenti censiti finora offre.
+
+---
+
+## Parte 5 — Da affrontare dopo i dieci punti
+
+Questioni emerse durante l'implementazione, deliberatamente rimandate a dopo la
+chiusura dei punti L. Non sono difetti dell'audit: sono domande che l'audit non
+si era poste.
+
+### P1 — La superficie di esposizione dei dati, oltre l'anonimizzazione
+
+**Cosa è già coperto** (verificato nel codice, non presunto): "Rifinisci" e
+"Valuta" ricevono il testo **RAW**, con i segnaposto di anonimizzazione intatti
+— `ResultViewer.tsx:372` passa `result.promptChat`, non `shownText(...)`. La
+de-anonimizzazione avviene **solo in locale**, al momento di mostrare, copiare o
+scaricare (`ResultViewer.tsx:284-293`). Nessun dato mascherato raggiunge il
+secondo provider.
+
+**Cosa resta scoperto**, ed è il punto vero:
+
+1. **L'anonimizzazione copre ciò che i regex riconoscono** — email, telefoni,
+   carte, CCV — più le selezioni manuali. Nomi di persona, indirizzi, ragioni
+   sociali, dettagli di progetto **non sono mascherati** e partono verso Gemini,
+   e poi verso il provider di rifinitura.
+2. **Il ripristino dipende dalla fedeltà del secondo provider**: se rifinendo il
+   modello altera un segnaposto, il dato originale non è più recuperabile.
+   `anon.intact` verifica questo sugli output Gemini; sugli output **rifiniti**
+   la verifica non è altrettanto stretta.
+3. **Due fornitori invece di uno**: anche perfettamente anonimizzato, il
+   contenuto del prompt attraversa un secondo servizio. Le condizioni d'uso
+   delle API a pagamento sono più protettive dei piani gratuiti, ma è una
+   garanzia contrattuale, non tecnica.
+
+**Perché non si risolve con un regex in più**: il punto 1 è un problema di
+categoria, non di copertura. Un rilevatore di nomi propri produce falsi positivi
+su ogni testo tecnico. Le direzioni sensate sono altre — dichiarare la superficie
+in modo esplicito all'utente prima dell'invio, oppure rendere la rifinitura
+un'operazione che l'utente sceglie consapevolmente per prompt, non una funzione
+sempre disponibile allo stesso costo di privacy.
+
+**Priorità**: dopo i punti L. Richiede una decisione di prodotto, non una
+correzione.
+
+### P2 — La fuga del meta-prompt nell'output
+
+Osservato in run 13, `code-config-toml`, 1 osservazione su 30: il modello ha
+copiato il token d'esempio `{{NOME_DESCRITTIVO}}` **e** ha riscritto la regola
+che lo introduceva come se fosse una direttiva da consegnare all'utente.
+
+Due rimedi indipendenti: rendere l'esempio non copiabile (ancorandolo a un dato
+concreto) e — la causa radice — separare i ruoli, che è **L4**.
 
 ---
 

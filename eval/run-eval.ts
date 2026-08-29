@@ -22,7 +22,8 @@
 //   EVAL_ONLY      run only these case ids, comma-separated
 //   EVAL_SLEEP_MS  pacing between calls (default: 13000 for the free tier)
 
-import { writeFileSync, mkdirSync, readFileSync, existsSync, mkdtempSync } from 'node:fs';
+import { writeFileSync, mkdirSync, readFileSync, existsSync, mkdtempSync, unlinkSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -101,8 +102,99 @@ const CLAUDE_MODEL = process.env.EVAL_CLAUDE_MODEL ?? 'sonnet';
 
 class JsonContractError extends Error {}
 
-/** Rolling checkpoint of the observations collected so far (see the loop). */
-const PARTIAL_PATH = 'eval/output/_partial.json';
+// ---------------------------------------------------------------------------
+// Checkpoint and resume
+//
+// Runs get killed. Five in a row died mid-flight on 2026-08-29 with zero
+// application errors, after three more had been lost to a network blackout, an
+// exhausted quota, and a sleeping network card. Diagnosing the killer is not
+// always possible from inside the run; making its death cheap always is.
+//
+// So the checkpoint is no longer write-only: a new run reads it back and skips
+// the observations it already holds. An interruption costs one call, not the
+// whole block.
+// ---------------------------------------------------------------------------
+
+/** One checkpoint per block, so concurrent or successive flows never clobber each other. */
+const CHECKPOINT_PATH = `eval/output/_partial-${ONLY_FLOW ?? 'all'}${MULTI ? '-multi' : ''}${
+  BACKEND === 'claude' ? '-claude' : ''
+}.json`;
+
+interface Checkpoint {
+  fingerprint: string;
+  observations: Observation[];
+}
+
+/**
+ * Identity of a measurement. Resuming is only sound when the interrupted run was
+ * measuring the SAME thing, and the field that bites is the last one: the
+ * meta-prompt text itself. Editing a FLOW_* constant mid-block and resuming
+ * would blend two different prompts into one report — no error, no warning,
+ * just numbers that mean nothing. Hashing the prompts makes that impossible.
+ */
+function runFingerprint(): string {
+  const promptText =
+    buildOptimizerSystemInstruction([
+      FLOW_CHAT_INSTRUCTIONS,
+      FLOW_COWORK_INSTRUCTIONS,
+      FLOW_CODE_INSTRUCTIONS,
+      FLOW_SYSTEM_USER_INSTRUCTIONS,
+      FLOW_GEMINI_INSTRUCTIONS,
+    ]) + SCAFFOLD_PROGETTO_INSTRUCTIONS;
+  const promptHash = createHash('sha256').update(promptText).digest('hex').slice(0, 12);
+  const engine = BACKEND === 'claude' ? `claude:${CLAUDE_MODEL}` : MODEL;
+  return `${engine}|reps=${REPS}|multi=${MULTI ? 1 : 0}|prompts=${promptHash}`;
+}
+
+function loadCheckpoint(fingerprint: string): Observation[] {
+  if (!existsSync(CHECKPOINT_PATH)) return [];
+  try {
+    const cp = JSON.parse(readFileSync(CHECKPOINT_PATH, 'utf8')) as Checkpoint;
+    if (cp.fingerprint !== fingerprint) {
+      console.log(
+        `Checkpoint presente ma di un'altra configurazione — ignorato, si riparte da zero.\n` +
+          `  trovato: ${cp.fingerprint}\n  atteso:  ${fingerprint}`,
+      );
+      return [];
+    }
+    return cp.observations ?? [];
+  } catch {
+    console.log('Checkpoint illeggibile — ignorato, si riparte da zero.');
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Local quota ledger
+//
+// IMPORTANT: this is a LOCAL tally of the calls THIS harness has made today, not
+// a reading of Google's counter. The Gemini API exposes no "requests remaining"
+// endpoint: a 429 is the only authoritative signal, and it arrives too late to
+// plan around. Calls made by the desktop app itself are invisible here, so treat
+// the number as a floor — the real usage is this or more.
+// ---------------------------------------------------------------------------
+
+const DAILY_CAP = Number(process.env.EVAL_DAILY_CAP ?? 500);
+const IGNORE_QUOTA = process.env.EVAL_IGNORE_QUOTA === '1';
+const today = () => new Date().toISOString().slice(0, 10);
+const quotaPath = () => `eval/output/_quota-${today()}.json`;
+
+function quotaUsed(): number {
+  if (!existsSync(quotaPath())) return 0;
+  try {
+    return Number(JSON.parse(readFileSync(quotaPath(), 'utf8')).calls) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function quotaBump(): void {
+  try {
+    writeFileSync(quotaPath(), JSON.stringify({ day: today(), calls: quotaUsed() + 1 }));
+  } catch {
+    // A ledger failure must never abort a measurement in progress.
+  }
+}
 
 /**
  * Spells out the JSON shape that `responseSchema` enforces on the Gemini path.
@@ -328,6 +420,34 @@ const pct = (n: number, d: number) => (d === 0 ? 0 : Math.round((n / d) * 100));
 /** Below this, the meta-prompt is not reliably imposing the rule. */
 const WARN_THRESHOLD = 90;
 
+/**
+ * Retries the server-side transients, and only those.
+ *
+ * A 500/503 from Google means "ask again", not "this prompt violates a rule":
+ * on 2026-08-29 seven such replies cost 13% of a block's observations and
+ * skewed nothing except the sample size. A 429 is deliberately NOT retried —
+ * within a run it means "not today", and hammering it burns the pacing budget
+ * without ever succeeding.
+ */
+async function withTransientRetry<T>(fn: () => Promise<T>, attempts = 2): Promise<T> {
+  const TRANSIENT = /\b(500|502|503|504)\b|internal error|high demand|unavailable/i;
+  let lastError: unknown;
+  for (let i = 0; i <= attempts; i += 1) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastError = e;
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!TRANSIENT.test(msg) || i === attempts) break;
+      const backoff = SLEEP_MS * (i + 1);
+      process.stdout.write(`transitorio, riprovo tra ${Math.round(backoff / 1000)}s... `);
+      quotaBump();
+      await sleep(backoff);
+    }
+  }
+  throw lastError;
+}
+
 function renderTable(stats: Map<EvalFlow, RuleStat[]>): string[] {
   const out: string[] = [];
   for (const [flow, rules] of stats) {
@@ -354,11 +474,41 @@ async function main() {
   const engine = BACKEND === 'claude' ? `claude CLI (${CLAUDE_MODEL})` : MODEL;
   console.log(`Backend: ${BACKEND} · Modello: ${engine} · Modalità: ${mode}`);
   console.log(`Casi: ${cases.length} · Ripetizioni: ${REPS} · Chiamate: ${total}`);
-  console.log(`Stima: ~${Math.round((total * SLEEP_MS) / 60000)} minuti\n`);
 
   mkdirSync('eval/output', { recursive: true });
 
-  const observations: Observation[] = [];
+  const fingerprint = runFingerprint();
+  const resumed = loadCheckpoint(fingerprint);
+  const done = new Set(resumed.map((o) => `${o.caseId}|${o.flow}|${o.rep}`));
+  const todo = total - done.size;
+
+  if (done.size > 0) {
+    console.log(`Ripresa: ${done.size} osservazioni già acquisite, ne restano ${todo}.`);
+  }
+
+  // Pre-flight on the local ledger. Starting a run that cannot finish wastes the
+  // very quota it needs: the free tier's 500 daily requests are the binding
+  // constraint, and a block that dies at 90% still spent 90% of the calls.
+  const used = quotaUsed();
+  console.log(
+    `Quota (conteggio locale, non di Google): ${used}/${DAILY_CAP} oggi · ` +
+      `residue ~${Math.max(0, DAILY_CAP - used)} · questa esecuzione ne chiede ${todo}`,
+  );
+  if (todo > DAILY_CAP - used) {
+    const msg =
+      `Quota insufficiente: servono ${todo} chiamate, ne risultano ~${Math.max(0, DAILY_CAP - used)}.\n` +
+      `Il conteggio è locale e non vede le chiamate fatte dall'app: potrebbe sottostimare l'uso reale.\n` +
+      `Per procedere comunque: EVAL_IGNORE_QUOTA=1`;
+    if (!IGNORE_QUOTA) {
+      console.error(`\n${msg}`);
+      process.exit(2);
+    }
+    console.log(`\n${msg}\n→ EVAL_IGNORE_QUOTA=1: procedo lo stesso.`);
+  }
+
+  console.log(`Stima: ~${Math.round((todo * SLEEP_MS) / 60000)} minuti\n`);
+
+  const observations: Observation[] = [...resumed];
   const errors: string[] = [];
   const jsonFailures: string[] = [];
   let n = 0;
@@ -371,22 +521,28 @@ async function main() {
   let consecutiveQuotaErrors = 0;
   const QUOTA_ABORT_THRESHOLD = 3;
 
+  // Calls actually issued this session (skipped observations are not calls), so
+  // the pacing sleep does not fire before the first real request of a resume.
+  let calls = 0;
+
   for (const c of cases) {
     for (const flow of c.flows) {
       if (!matches(flow)) continue;
       for (let rep = 1; rep <= REPS; rep += 1) {
         n += 1;
-        if (n > 1 && SLEEP_MS > 0) await sleep(SLEEP_MS);
+        if (done.has(`${c.id}|${flow}|${rep}`)) continue;
+        if (calls > 0 && SLEEP_MS > 0) await sleep(SLEEP_MS);
+        calls += 1;
         process.stdout.write(`[${n}/${total}] ${c.id} (${flow}) ${rep}/${REPS}... `);
+        quotaBump();
         try {
-          const { text, conformance } = await generateAndCheck(flow, c.input);
+          const { text, conformance } = await withTransientRetry(() => generateAndCheck(flow, c.input));
           observations.push({ caseId: c.id, flow, rep, text, conformance });
           consecutiveQuotaErrors = 0;
-          // Checkpoint after every observation. The markdown report is written
-          // only at the end, so an interrupted run used to leave nothing behind
-          // — three runs were lost that way, one of them at 108/198 after forty
-          // minutes of clean calls. This file makes a killed run recoverable.
-          writeFileSync(PARTIAL_PATH, JSON.stringify(observations));
+          // Checkpoint after every observation, and read back on the next run
+          // (see loadCheckpoint). The markdown report is written only at the
+          // end, so an interrupted run used to leave nothing usable behind.
+          writeFileSync(CHECKPOINT_PATH, JSON.stringify({ fingerprint, observations } satisfies Checkpoint));
           const failed = conformance.total - conformance.passed;
           process.stdout.write(failed === 0 ? 'ok\n' : `${conformance.passed}/${conformance.total}\n`);
         } catch (e) {
@@ -503,6 +659,20 @@ async function main() {
   writeFileSync(path, lines.join('\n'));
   writeFileSync(`eval/output/latest-${suffix}.md`, lines.join('\n'));
   console.log(`\nReport in ${path} (e eval/output/latest.md).`);
+
+  // The checkpoint is dropped only when the block is genuinely COMPLETE.
+  // Reaching the last case is not the same thing: transient 500/503 replies from
+  // Google leave holes (7 of 54 on the systemUser block, 2026-08-29), and
+  // deleting the checkpoint there would force a re-run of every observation to
+  // recover a handful. Keeping it lets a re-run fill only the gaps.
+  if (errors.length === 0 && jsonFailures.length === 0) {
+    if (existsSync(CHECKPOINT_PATH)) unlinkSync(CHECKPOINT_PATH);
+  } else {
+    console.log(
+      `Checkpoint conservato (${observations.length} osservazioni): rilancia lo stesso blocco ` +
+        `per recuperare solo le ${errors.length + jsonFailures.length} mancanti.`,
+    );
+  }
 }
 
 main().catch((e) => {
