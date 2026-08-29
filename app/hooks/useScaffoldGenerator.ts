@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { buildScaffoldSchema, parseOptimizerResponse } from '../lib/promptOptimizer';
+import {
+  buildScaffoldSchema,
+  parseOptimizerResponse,
+  wrapUserInput,
+  USER_INPUT_FRAMING,
+} from '../lib/promptOptimizer';
 import { buildScaffold } from '../lib/scaffoldBuilder';
 import { writeScaffoldToDir, downloadScaffoldZip } from '../lib/scaffoldPackager';
 import { logger } from '../lib/logger';
@@ -56,8 +61,11 @@ export function useScaffoldGenerator(apiKey: string, selectedModel: string) {
     setGenerating(true);
     try {
       const genAI = new GoogleGenerativeAI(apiKey);
+      // Same role separation as the optimizer (L4): instructions in the API's
+      // `systemInstruction` field, the user's description delimited in the turn.
       const model = genAI.getGenerativeModel({
         model: selectedModel,
+        systemInstruction: `${USER_INPUT_FRAMING}\n\n${SCAFFOLD_PROGETTO_INSTRUCTIONS}`,
         generationConfig: {
           responseMimeType: 'application/json',
           responseSchema: buildScaffoldSchema(),
@@ -65,7 +73,7 @@ export function useScaffoldGenerator(apiKey: string, selectedModel: string) {
       });
 
       const chat = model.startChat();
-      const response = await chat.sendMessage([SCAFFOLD_PROGETTO_INSTRUCTIONS, input]);
+      const response = await chat.sendMessage(wrapUserInput(input));
       const finishReason = response.response.candidates?.[0]?.finishReason;
 
       const { progetto } = parseOptimizerResponse<{ progetto: string }>({

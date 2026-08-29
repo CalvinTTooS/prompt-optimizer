@@ -4,6 +4,7 @@ import {
   buildResponseSchema,
   buildOptimizerSystemInstruction,
   parseOptimizerResponse,
+  wrapUserInput,
   type OptimizerResult,
 } from '../lib/promptOptimizer';
 import { runAnonymization, type CensoredEntry } from '../lib/anonymization';
@@ -108,20 +109,6 @@ export function usePromptOptimizer(apiKey: string, selectedModel: string) {
 
       const responseSchema = buildResponseSchema({ genChat, genCowork, genCode, genSystemUser, genGemini });
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({
-        model: selectedModel,
-        // No `temperature`: Google recommends leaving sampling at the model
-        // default for the Gemini 3.x family — "If your existing code explicitly
-        // sets temperature (especially to low values for deterministic
-        // outputs), we recommend removing this parameter" — warning that low
-        // values can cause looping or degradation on complex tasks. Dropping it
-        // also makes production match the eval harness, which never set it: as
-        // long as they differ, every measured baseline carries an asterisk.
-        generationConfig: {
-          responseMimeType: 'application/json',
-          responseSchema,
-        },
-      });
 
       // The examples block is appended ONCE, not per flow: its own preamble
       // already reads "per tutti i formati selezionati", so repeating it per
@@ -148,8 +135,30 @@ export function usePromptOptimizer(apiKey: string, selectedModel: string) {
         systemInstruction = runAnonymization(systemInstruction, inputDetections).safeText;
       }
 
+      // The instructions travel in the API's own `systemInstruction` field, not
+      // as a part of the user turn. Before L4 both arrived as two parts of the
+      // SAME turn, with identical standing: nothing structural said which one
+      // was the command and which the material. Two defects came through that
+      // gap — the user's own text being read as directives, and the meta-prompt
+      // being echoed back into the produced prompt (1.6% in run 13).
+      const model = genAI.getGenerativeModel({
+        model: selectedModel,
+        systemInstruction,
+        // No `temperature`: Google recommends leaving sampling at the model
+        // default for the Gemini 3.x family — "If your existing code explicitly
+        // sets temperature (especially to low values for deterministic
+        // outputs), we recommend removing this parameter" — warning that low
+        // values can cause looping or degradation on complex tasks. Dropping it
+        // also makes production match the eval harness, which never set it: as
+        // long as they differ, every measured baseline carries an asterisk.
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema,
+        },
+      });
+
       const chat = model.startChat();
-      const response = await chat.sendMessage([systemInstruction, finalInputForAI]);
+      const response = await chat.sendMessage(wrapUserInput(finalInputForAI));
       const finishReason = response.response.candidates?.[0]?.finishReason;
 
       const parsed = parseOptimizerResponse({ text: response.response.text(), finishReason }) as OptimizerResult;

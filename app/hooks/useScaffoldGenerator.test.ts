@@ -17,7 +17,14 @@ const getAllScaffoldOverrides = vi.fn(async () => ({}));
 const setScaffoldOverride = vi.fn();
 const clearScaffoldOverride = vi.fn();
 
-vi.mock('../lib/promptOptimizer', () => ({ buildScaffoldSchema, parseOptimizerResponse }));
+// Partial mock: only the two functions this suite spies on are replaced, so
+// wrapUserInput/USER_INPUT_FRAMING stay REAL and the delimiter the hook actually
+// ships is the one under test.
+vi.mock('../lib/promptOptimizer', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../lib/promptOptimizer')>()),
+  buildScaffoldSchema,
+  parseOptimizerResponse,
+}));
 vi.mock('../lib/scaffoldBuilder', () => ({ buildScaffold }));
 vi.mock('../lib/scaffoldPackager', () => ({ writeScaffoldToDir, downloadScaffoldZip }));
 vi.mock('../lib/logger', () => ({ logger: { error: loggerError } }));

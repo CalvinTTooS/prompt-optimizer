@@ -42,6 +42,8 @@ import {
   buildScaffoldSchema,
   buildOptimizerSystemInstruction,
   parseOptimizerResponse,
+  wrapUserInput,
+  USER_INPUT_FRAMING,
   type OptimizerFlows,
 } from '../app/lib/promptOptimizer';
 import {
@@ -177,7 +179,14 @@ function loadCheckpoint(fingerprint: string): Observation[] {
 const DAILY_CAP = Number(process.env.EVAL_DAILY_CAP ?? 500);
 const IGNORE_QUOTA = process.env.EVAL_IGNORE_QUOTA === '1';
 const today = () => new Date().toISOString().slice(0, 10);
-const quotaPath = () => `eval/output/_quota-${today()}.json`;
+
+// The tally is scoped by DAY and by KEY. Google's free tier meters per project,
+// so swapping in a key from another account brings its own budget: a ledger
+// keyed only by day would refuse a run against a freshly reset key. The key
+// itself is never written anywhere — only a short digest of it, enough to tell
+// two keys apart and useless to anyone who reads the file.
+const KEY_ID = createHash('sha256').update(API_KEY).digest('hex').slice(0, 8);
+const quotaPath = () => `eval/output/_quota-${today()}-${KEY_ID}.json`;
 
 function quotaUsed(): number {
   if (!existsSync(quotaPath())) return 0;
@@ -190,7 +199,7 @@ function quotaUsed(): number {
 
 function quotaBump(): void {
   try {
-    writeFileSync(quotaPath(), JSON.stringify({ day: today(), calls: quotaUsed() + 1 }));
+    writeFileSync(quotaPath(), JSON.stringify({ day: today(), key: KEY_ID, calls: quotaUsed() + 1 }));
   } catch {
     // A ledger failure must never abort a measurement in progress.
   }
@@ -308,15 +317,18 @@ async function generateAndCheck(flow: EvalFlow, input: string): Promise<{ text: 
   if (flow === 'scaffold') {
     let progetto: string;
     if (BACKEND === 'claude') {
+      // The CLI has no system-instruction channel, so the boundary here can only
+      // be textual: the delimiter still marks material from directives.
       ({ progetto } = callClaude<{ progetto: string }>(
-        `${SCAFFOLD_PROGETTO_INSTRUCTIONS}\n\n${jsonContract(['progetto'])}\n\n${input}`,
+        `${USER_INPUT_FRAMING}\n\n${SCAFFOLD_PROGETTO_INSTRUCTIONS}\n\n${jsonContract(['progetto'])}\n\n${wrapUserInput(input)}`,
       ));
     } else {
       const model = genAI.getGenerativeModel({
         model: MODEL,
+        systemInstruction: `${USER_INPUT_FRAMING}\n\n${SCAFFOLD_PROGETTO_INSTRUCTIONS}`,
         generationConfig: { responseMimeType: 'application/json', responseSchema: buildScaffoldSchema() },
       });
-      const response = await model.startChat().sendMessage([SCAFFOLD_PROGETTO_INSTRUCTIONS, input]);
+      const response = await model.startChat().sendMessage(wrapUserInput(input));
       const finishReason = response.response.candidates?.[0]?.finishReason;
       ({ progetto } = parseOptimizerResponse<{ progetto: string }>({
         text: response.response.text(),
@@ -355,13 +367,16 @@ async function generateAndCheck(flow: EvalFlow, input: string): Promise<{ text: 
     if (flows.genCode) fields.push('promptCode');
     if (flows.genSystemUser) fields.push('promptSystem', 'promptUser');
     if (flows.genGemini) fields.push('promptGemini');
-    parsed = callClaude<OptimizerResultLike>(`${instruction}\n\n${jsonContract(fields)}\n\n${input}`);
+    parsed = callClaude<OptimizerResultLike>(
+      `${instruction}\n\n${jsonContract(fields)}\n\n${wrapUserInput(input)}`,
+    );
   } else {
     const model = genAI.getGenerativeModel({
       model: MODEL,
+      systemInstruction: instruction,
       generationConfig: { responseMimeType: 'application/json', responseSchema: buildResponseSchema(flows) },
     });
-    const response = await model.startChat().sendMessage([instruction, input]);
+    const response = await model.startChat().sendMessage(wrapUserInput(input));
     const finishReason = response.response.candidates?.[0]?.finishReason;
     parsed = parseOptimizerResponse({ text: response.response.text(), finishReason });
   }
