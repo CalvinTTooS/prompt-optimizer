@@ -358,15 +358,120 @@ Non alterano l'impronta e non invalidano nessuna baseline.
 
 ---
 
+## Run 14 — 2026-08-29 · verifica di L4 (separazione dei ruoli)
+
+| | |
+|---|---|
+| Commit misurato | `7ba0c21` |
+| Modello | `gemini-3.5-flash-lite` (fissato) |
+| Impronta | `gemini-3.5-flash-lite\|reps=3\|multi=0\|prompts=ec91bc1de1c3` |
+| Corpus | 66 casi · K=3 · **198 osservazioni** · 960 controlli |
+| Esito | **955/960 superati (99,5%)** |
+
+**Cosa è cambiato**: le istruzioni viaggiano nel campo nativo `systemInstruction`
+invece che come parte del turno utente, e l'input è delimitato da
+`<prompt_utente>`, con le istruzioni che dichiarano cosa significa il
+delimitatore. È l'unica modifica rispetto alla run 13.
+
+### Tassi per regola
+
+| Flusso | Regola | Conformi | % |
+|---|---|---|---|
+| chat | tutte e 4 | 42/42 | **100%** |
+| code | tutte e 10 | 30/30 | **100%** |
+| cowork | `cowork.spacing` | 23/24 | 96% |
+| cowork | `tags` · `balanced` · `anon.intact` | 24/24 | 100% |
+| systemUser | tutte e 3 | 54/54 | **100%** |
+| gemini | **`noGenericPhrases`** | 26/30 | **87%** ⚠ |
+| gemini | le altre 5 (incl. `concreteCommands`) | 30/30 | 100% |
+| scaffold | tutte e 3 | 18/18 | **100%** |
+
+### Confronto con la run 13
+
+| Regola | Run 13 | Run 14 | |
+|---|---|---|---|
+| `gemini.concreteCommands` | 29/30 · 97% | **30/30 · 100%** | ⬆ |
+| `cowork.spacing` | 24/24 · 100% | 23/24 · 96% | ⬇ −1 |
+| **`gemini.noGenericPhrases`** | 30/30 · 100% | **26/30 · 87%** | ⬇ **−4** |
+| le altre 27 | 100% | 100% | = |
+
+### ✅ L'obiettivo di L4 è centrato
+
+| Indicatore | Run 13 | Run 14 |
+|---|---|---|
+| Fughe del meta-prompt nell'output | 3 su 191 (1,6%) | **0 su 198** |
+| Tag `<prompt_utente>` trapelato nel prodotto | — | **0 su 198** |
+
+Nessuna osservazione riemette le regole ricevute. Il delimitatore, elemento nuovo
+presente in ogni richiesta, non compare mai nell'output: il modello lo tratta
+come struttura, non come contenuto — la separazione è stata capita, non solo
+ricevuta.
+
+### Adozione dei segnaposto — tiene
+
+Indicatore diagnostico, **non una metrica di qualità**: il valore atteso è alto
+dove il flusso comporta dati variabili e nullo dove non ce ne sono.
+
+| Flusso | Run 13 | Run 14 |
+|---|---|---|
+| systemUser | 98% | 98% |
+| cowork | 75% | 79% |
+| chat | 38% | 50% |
+| gemini | 13% | 3% |
+| code | 10% | 7% |
+| scaffold | 0% | 0% |
+
+Spostare le istruzioni nel canale di sistema **non ne ha indebolito la presa**,
+che era il rischio dichiarato prima della run.
+
+### ⚠️ Aperto: `gemini.noGenericPhrases` a 87%
+
+Quattro osservazioni perse su trenta, distribuite su **quattro casi diversi**
+(`gemini-python-uv`, `gemini-web-generico`, `gemini-non-rompere-test`,
+`gemini-commit-docs`), una ripetizione ciascuno — non un caso che sbanda tre
+volte. Un movimento diffuso somiglia più a uno spostamento sistematico che a un
+valore anomalo.
+
+Esempio: `Esegui i test con il comando concreto del progetto, ad esempio:
+npm test (assumo npm; sostituisci se il progetto usa un altro gestore)`. Il
+modello si cautela invece di decidere.
+
+Ipotesi non verificata: dichiarando che il testo dell'utente è *materiale e non
+istruzioni*, gli si toglie parte dell'autorità con cui prima ne assumeva i
+dettagli — l'ombra della stessa modifica che ha eliminato le fughe. Si falsifica
+ripetendo il solo blocco `gemini` (30 chiamate), non ragionandoci.
+
+### Nota operativa: le chiavi API
+
+Un pomeriggio perso su un difetto di **osservabilità**, non di logica:
+`loadApiKey()` preferisce `process.env.GEMINI_API_KEY` al file `.env.local` — che
+è la precedenza giusta — ma lo faceva **in silenzio**. Una variabile d'ambiente
+permanente a livello utente Windows ombreggiava il file, quindi rinominare
+`.env.local` per cambiare account non cambiava nulla e ogni run continuava a
+spendere lo stesso budget, fino al 429 a quota combinata ~500.
+
+Ora la prima riga di ogni run stampa `Chiave: <digest> · da <fonte>`, e quel
+digest è lo stesso che nomina il file del registro quota: le due cose sono
+confrontabili a colpo d'occhio. La chiave in chiaro non viene mai stampata né
+scritta.
+
+---
+
 ## Come registrare una run futura
 
-1. Eseguire **a blocchi**, un flusso per volta (`EVAL_FLOW=<flusso>` in sequenza):
-   ogni segmento dura 4-12 minuti e scrive il proprio report appena finisce, quindi
-   un'interruzione costa al massimo il segmento in corso. Tre run intere sono
-   andate perse prima di adottare questa abitudine.
-2. Copiare qui la tabella dei tassi, con commit, modello, modalità e data
-3. Annotare il **delta** rispetto alla run precedente e la modifica che l'ha causato
-4. **Leggere il testo generato prima di dichiarare un reperto.** Non le
+1. Eseguire **a blocchi**, un flusso per volta (`EVAL_FLOW=<flusso>` in sequenza).
+   Resta la forma consigliata, ma il motivo è cambiato: non più la fragilità —
+   dalla run 14 l'harness **riprende dal checkpoint**, quindi un'interruzione
+   costa una chiamata, non un blocco — bensì la leggibilità, perché ogni segmento
+   scrive il proprio report appena finisce. Se una run viene interrotta, basta
+   rilanciare lo stesso comando: le osservazioni già acquisite non si rifanno.
+2. **Controllare la prima riga**: `Chiave: <digest> · da <fonte>`. Una variabile
+   d'ambiente ombreggia `.env.local` in silenzio, e il digest è l'unico modo di
+   sapere quale budget si sta spendendo. Deve corrispondere al file
+   `eval/output/_quota-<data>-<digest>.json`.
+3. Copiare qui la tabella dei tassi, con commit, modello, modalità e data
+4. Annotare il **delta** rispetto alla run precedente e la modifica che l'ha causato
+5. **Leggere il testo generato prima di dichiarare un reperto.** Non le
    percentuali: il testo. Un tasso basso è stato **tre volte su tre** un difetto
    del *verificatore*, non del prodotto:
    - `code.noPlaceholders` — segnalava i segnaposto **citati per vietarli**
@@ -379,13 +484,13 @@ Non alterano l'impronta e non invalidano nessuna baseline.
    **due analisi consecutive** ad accusare l'oggetto sbagliato — inclusa una sonda
    cross-modello da trenta chiamate.
 
-5. **Verificare che il check corrisponda alla regola COME È SCRITTA**, non
+6. **Verificare che il check corrisponda alla regola COME È SCRITTA**, non
    all'intenzione che gli attribuiamo. Se la regola dice *"comando concreto (es.
    `npm test`)"*, l'esempio non è il requisito: pretendere i backtick significa
    misurare una regola che non esiste. Se li vogliamo davvero, si scrivono nella
    regola — è la lezione di L3 applicata al verificatore.
 
-6. **Controllare COME si distribuiscono le osservazioni mancanti**, non solo
+7. **Controllare COME si distribuiscono le osservazioni mancanti**, non solo
    quante sono. Chiamate fallite, troncamenti e risposte fuori contratto non sono
    rumore uniforme: se si concentrano sui casi difficili, il tasso che resta è
    **gonfiato** e il confronto è invalido anche se i numeri sembrano sani. È già
@@ -393,7 +498,7 @@ Non alterano l'impronta e non invalidano nessuna baseline.
    risposte fuori contratto tutte sui casi ostici. Quando accade, ricalcolare
    **sul sottoinsieme comune** invece di confrontare i totali.
 
-7. **Un cambiamento al verificatore invalida la baseline della metrica toccata**,
+8. **Un cambiamento al verificatore invalida la baseline della metrica toccata**,
    non delle altre. Registrarlo esplicitamente: con lo strumento nuovo il numero
    vecchio non è più confrontabile. Se serve il nuovo valore subito, **ri-valutare
    gli output archiviati** in `eval/output/` invece di rigenerarli: generazione e

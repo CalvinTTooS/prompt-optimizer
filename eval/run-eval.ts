@@ -56,11 +56,27 @@ import {
   type ConformanceResult,
 } from '../app/lib/conformance';
 
+/**
+ * Where the key came from. Reported at startup, because the precedence here is
+ * SILENT and that cost a full afternoon on 2026-08-29: an exported
+ * GEMINI_API_KEY shadowed `.env.local` entirely, so renaming the file to swap
+ * accounts changed nothing while every run kept spending one budget. The value
+ * is never printed — only its source and a short digest, which is enough to
+ * tell two keys apart and to match a run against its quota ledger.
+ */
+let keySource = 'sconosciuta';
+
 function loadApiKey(): string {
-  if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY;
+  if (process.env.GEMINI_API_KEY) {
+    keySource = "variabile d'ambiente GEMINI_API_KEY";
+    return process.env.GEMINI_API_KEY;
+  }
   if (existsSync('.env.local')) {
     const m = readFileSync('.env.local', 'utf8').match(/^\s*GEMINI_API_KEY\s*=\s*(.+)$/m);
-    if (m) return m[1].trim().replace(/^["']|["']$/g, '');
+    if (m) {
+      keySource = 'file .env.local';
+      return m[1].trim().replace(/^["']|["']$/g, '');
+    }
   }
   throw new Error('GEMINI_API_KEY non impostata (variabile d\'ambiente o riga in .env.local).');
 }
@@ -445,7 +461,14 @@ const WARN_THRESHOLD = 90;
  * without ever succeeding.
  */
 async function withTransientRetry<T>(fn: () => Promise<T>, attempts = 2): Promise<T> {
-  const TRANSIENT = /\b(500|502|503|504)\b|internal error|high demand|unavailable/i;
+  // Quota refusals are checked FIRST and never retried. This ordering is not
+  // decorative: a 429 body reads "limit: 500" and "quotaValue":"500", so a bare
+  // \b500\b matched it and the retry logic escalated the very error it was meant
+  // to leave alone — burning calls against an already-exhausted budget on
+  // 2026-08-29. Transients are matched on the SDK's bracketed status prefix
+  // (`[503 Service Unavailable]`), not on any occurrence of the number.
+  const QUOTA = /\b429\b|quota exceeded|RESOURCE_EXHAUSTED/i;
+  const TRANSIENT = /\[(500|502|503|504)\s|internal error|high demand|service unavailable/i;
   let lastError: unknown;
   for (let i = 0; i <= attempts; i += 1) {
     try {
@@ -453,7 +476,7 @@ async function withTransientRetry<T>(fn: () => Promise<T>, attempts = 2): Promis
     } catch (e) {
       lastError = e;
       const msg = e instanceof Error ? e.message : String(e);
-      if (!TRANSIENT.test(msg) || i === attempts) break;
+      if (QUOTA.test(msg) || !TRANSIENT.test(msg) || i === attempts) break;
       const backoff = SLEEP_MS * (i + 1);
       process.stdout.write(`transitorio, riprovo tra ${Math.round(backoff / 1000)}s... `);
       quotaBump();
@@ -488,6 +511,7 @@ async function main() {
   const mode = MULTI ? 'multi-flusso (5 formati per chiamata)' : 'flusso singolo';
   const engine = BACKEND === 'claude' ? `claude CLI (${CLAUDE_MODEL})` : MODEL;
   console.log(`Backend: ${BACKEND} · Modello: ${engine} · Modalità: ${mode}`);
+  console.log(`Chiave: ${KEY_ID} · da ${keySource}`);
   console.log(`Casi: ${cases.length} · Ripetizioni: ${REPS} · Chiamate: ${total}`);
 
   mkdirSync('eval/output', { recursive: true });
@@ -572,6 +596,17 @@ async function main() {
           } else {
             errors.push(`${c.id} (${flow}) rep ${rep}: ${msg}`);
             process.stdout.write(`ERRORE: ${msg}\n`);
+
+            // A rejected key fails every remaining call identically: there is
+            // nothing to salvage by continuing, and the pacing sleep would drag
+            // a doomed corpus out for half an hour. Stop on the first one.
+            if (/API_KEY_INVALID|API key not valid/i.test(msg)) {
+              console.error(
+                `\nInterrotto: la chiave (${KEY_ID}, da ${keySource}) è rifiutata dall'API.\n` +
+                  `Le osservazioni già acquisite restano nel checkpoint.`,
+              );
+              process.exit(2);
+            }
 
             if (/\b429\b|quota/i.test(msg)) {
               consecutiveQuotaErrors += 1;
