@@ -23,6 +23,32 @@ export type ConformanceFlow =
   | 'gemini'
   | 'scaffold';
 
+/**
+ * The four checks that need JUDGEMENT rather than parsing.
+ *
+ * The file header promises that every check here is decidable by a parser.
+ * These four are not, and the measurements say so plainly: across sixteen runs
+ * they produced ALL THREE false positives the harness has ever generated, and
+ * `gemini.noGenericPhrases` swung by 4 observations out of 30 between two runs
+ * of an IDENTICAL configuration. The twenty structural checks never moved by a
+ * single observation.
+ *
+ * They are kept rather than deleted — `concreteCommands` at 70% is what exposed
+ * a genuine defect in rule 4 of FLOW_GEMINI — but reported apart, and excluded
+ * from the headline pass rate. Averaging a measure that never moves with one
+ * that swings by four points produces a number that means neither.
+ */
+export const INTERPRETIVE_CHECKS = new Set([
+  'gemini.concreteCommands',
+  'gemini.noGenericPhrases',
+  'gemini.noUserQuestions',
+  'code.noUserQuestions',
+  'sysusr.noDuplication',
+]);
+
+/** True when the rule needs judgement, so its rate is indicative, not a verdict. */
+export const isInterpretive = (id: string): boolean => INTERPRETIVE_CHECKS.has(id);
+
 export interface ConformanceCheck {
   /** Stable id, e.g. 'code.noMarkdownLinks'. Used to aggregate across runs. */
   id: string;

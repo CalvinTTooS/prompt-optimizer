@@ -21,6 +21,10 @@
 //   EVAL_FLOW      run only one flow, e.g. EVAL_FLOW=code
 //   EVAL_ONLY      run only these case ids, comma-separated
 //   EVAL_SLEEP_MS  pacing between calls (default: 13000 for the free tier)
+//   EVAL_DAILY_CAP daily request budget for the quota pre-flight (default: 500)
+//   EVAL_QUOTA_USED  seed today's ledger with the REAL figure read in AI Studio
+//   EVAL_IGNORE_QUOTA=1  run even if the pre-flight says the budget is short
+//   EVAL_REPORT_ONLY=1   rebuild the report from the checkpoint, no API calls
 
 import { writeFileSync, mkdirSync, readFileSync, existsSync, mkdtempSync, unlinkSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -55,6 +59,7 @@ import {
   checkGemini,
   checkScaffoldProject,
   checkSpiegazione,
+  isInterpretive,
   type ConformanceResult,
 } from '../app/lib/conformance';
 
@@ -213,6 +218,21 @@ function quotaUsed(): number {
   } catch {
     return 0;
   }
+}
+
+/**
+ * Overwrites the local tally with the figure read in Google AI Studio.
+ *
+ * The ledger only sees the calls THIS harness made: the desktop app's are
+ * invisible to it, so it drifts low. AI Studio is the authoritative source, and
+ * a human can read it — the API exposes no "requests remaining" endpoint. This
+ * lets that reading correct the estimate instead of competing with it.
+ */
+function seedQuotaFromEnv(): void {
+  const declared = Number(process.env.EVAL_QUOTA_USED);
+  if (!Number.isFinite(declared) || declared < 0) return;
+  writeFileSync(quotaPath(), JSON.stringify({ day: today(), key: KEY_ID, calls: declared }));
+  console.log(`Registro quota allineato al valore dichiarato: ${declared} (fonte: EVAL_QUOTA_USED).`);
 }
 
 function quotaBump(): void {
@@ -502,15 +522,184 @@ function renderTable(stats: Map<EvalFlow, RuleStat[]>): string[] {
   const out: string[] = [];
   for (const [flow, rules] of stats) {
     const observations = rules[0]?.total ?? 0;
+    const byRate = (a: RuleStat, b: RuleStat) => pct(a.passed, a.total) - pct(b.passed, b.total);
+    const structural = rules.filter((r) => !isInterpretive(r.id)).sort(byRate);
+    const interpretive = rules.filter((r) => isInterpretive(r.id)).sort(byRate);
+
     out.push('', `## Flusso ${flow.toUpperCase()} — ${observations} osservazioni`, '');
+
+    // Two tables, not one. The structural rules ARE the verdict: a parser decides
+    // them and they have not moved by a single observation in sixteen runs. The
+    // interpretive ones are indicative — they produced every false positive this
+    // harness has ever generated, and one of them swings by 4 observations out of
+    // 30 between identical runs. Averaging the two yields a number that describes
+    // neither, and hides which kind of measure moved.
+    out.push('### Conformità — regole strutturali', '');
     out.push('| Regola | Conformi | % | |');
     out.push('|---|---|---|---|');
-    for (const r of rules.sort((a, b) => pct(a.passed, a.total) - pct(b.passed, b.total))) {
+    for (const r of structural) {
       const p = pct(r.passed, r.total);
       out.push(`| \`${r.id}\` ${r.label} | ${r.passed}/${r.total} | ${p}% | ${p < WARN_THRESHOLD ? '⚠' : ''} |`);
     }
+
+    if (interpretive.length > 0) {
+      out.push('', '### Indicatori — regole interpretative', '');
+      out.push(
+        '> Richiedono giudizio, non parsing: **non entrano nel tasso di conformità**.',
+        '> Uno scostamento di poche osservazioni qui non è una regressione — su',
+        '> configurazioni identiche `gemini.noGenericPhrases` ha oscillato fra 26 e',
+        '> 30 su 30 (run 13-16). Si leggono come segnale debole, non come verdetto.',
+        '',
+      );
+      out.push('| Indicatore | Conformi | % |');
+      out.push('|---|---|---|');
+      for (const r of interpretive) {
+        out.push(`| \`${r.id}\` ${r.label} | ${r.passed}/${r.total} | ${pct(r.passed, r.total)}% |`);
+      }
+    }
   }
   return out;
+}
+
+/** Headline totals, computed on the structural rules only — see renderTable. */
+function structuralTotals(stats: Map<EvalFlow, RuleStat[]>): { passed: number; total: number } {
+  let passed = 0;
+  let total = 0;
+  for (const rules of stats.values()) {
+    for (const r of rules) {
+      if (isInterpretive(r.id)) continue;
+      passed += r.passed;
+      total += r.total;
+    }
+  }
+  return { passed, total };
+}
+
+/**
+ * Renders the console summary and the markdown report.
+ *
+ * Extracted from `main` so it can run on a checkpoint alone: a killed run used
+ * to leave its observations in JSON and nothing readable, and reading them meant
+ * opening the file by hand. `EVAL_REPORT_ONLY=1` now rebuilds the full report
+ * from the checkpoint with zero API calls — which works even when the process
+ * was killed outright and no signal handler could have fired.
+ */
+function emitReport(
+  observations: Observation[],
+  errors: string[],
+  jsonFailures: string[],
+  meta: { started: Date; casesCount: number; engine: string; mode: string; partial: boolean },
+): void {
+  const stats = aggregate(observations);
+
+  // --- console summary: the headline is the per-rule rate, nothing else ---
+  console.log('\n' + '='.repeat(60));
+  console.log(meta.partial ? 'CONFORMITÀ PER REGOLA (report PARZIALE)' : 'CONFORMITÀ PER REGOLA');
+  console.log('='.repeat(60));
+  for (const [flow, rules] of stats) {
+    console.log(`\n${flow.toUpperCase()} (${rules[0]?.total ?? 0} osservazioni)`);
+    const byRate = (a: RuleStat, b: RuleStat) => pct(a.passed, a.total) - pct(b.passed, b.total);
+    const line = (r: RuleStat, mark: boolean) => {
+      const p = pct(r.passed, r.total);
+      console.log(
+        `  ${r.id.padEnd(28)} ${String(r.passed).padStart(3)}/${String(r.total).padEnd(3)} ${String(p).padStart(3)}%  ${mark && p < WARN_THRESHOLD ? '⚠' : ''}`,
+      );
+    };
+    for (const r of rules.filter((r) => !isInterpretive(r.id)).sort(byRate)) line(r, true);
+    const interpretive = rules.filter((r) => isInterpretive(r.id)).sort(byRate);
+    if (interpretive.length > 0) {
+      console.log('  — indicatori (giudizio, fuori dal tasso di conformità) —');
+      for (const r of interpretive) line(r, false);
+    }
+  }
+
+  const totals = structuralTotals(stats);
+  console.log(
+    `\nConformità strutturale: ${totals.passed}/${totals.total} (${pct(totals.passed, totals.total)}%)`,
+  );
+  if (errors.length) console.log(`\n${errors.length} chiamate fallite (vedi il report).`);
+  if (jsonFailures.length) {
+    console.log(`${jsonFailures.length} risposte con JSON non conforme — artefatto del backend, non violazioni di regola.`);
+  }
+
+  // --- markdown report, with the evidence for every failure ---
+  const lines: string[] = [
+    '# Eval di conformità',
+    '',
+    `Backend: **${BACKEND}** · Modello: \`${meta.engine}\` · Modalità: **${meta.mode}** · Casi: ${meta.casesCount} · Ripetizioni: ${REPS} · Avvio: ${meta.started.toISOString()}`,
+    '',
+  ];
+
+  if (meta.partial) {
+    lines.push(
+      '> ⚠️ **Report PARZIALE**, ricostruito da un checkpoint: il blocco non è arrivato',
+      '> in fondo. I tassi qui sotto valgono sulle osservazioni raccolte, non sul corpus',
+      '> intero — **non confrontarli con una run completa** senza ricalcolare sul',
+      '> sottoinsieme comune.',
+      '',
+    );
+  }
+
+  lines.push(
+    '> I numeri servono a **falsificare** una regola, non a certificarla. Confronta il',
+    '> **delta** tra due esecuzioni (prima/dopo una modifica ai meta-prompt), non il livello.',
+    '',
+    `**Conformità strutturale: ${totals.passed}/${totals.total} (${pct(totals.passed, totals.total)}%)** ` +
+      '— le regole interpretative sono riportate a parte e non entrano in questo totale.',
+    ...renderTable(stats),
+  );
+
+  for (const [flow, rules] of stats) {
+    const failing = rules.filter((r) => r.failures.length > 0);
+    if (failing.length === 0) continue;
+    lines.push('', `### Violazioni — ${flow}`, '');
+    for (const r of failing) {
+      lines.push(`**\`${r.id}\`** — ${r.label}`, '');
+      for (const f of r.failures.slice(0, 10)) {
+        lines.push(`- \`${f.caseId}\`${f.evidence ? `: ${f.evidence}` : ''}`);
+      }
+      if (r.failures.length > 10) lines.push(`- …e altre ${r.failures.length - 10}`);
+      lines.push('');
+    }
+  }
+
+  if (errors.length) {
+    lines.push('', '## Chiamate fallite', '', ...errors.map((e) => `- ${e}`));
+  }
+  if (jsonFailures.length) {
+    lines.push(
+      '',
+      '## Risposte con JSON non conforme',
+      '',
+      '> Artefatto del **backend**, non violazioni di regola: senza `responseSchema` la',
+      '> forma JSON è solo richiesta, non imposta. Contate a parte per non falsare il confronto.',
+      '',
+      ...jsonFailures.map((e) => `- ${e}`),
+    );
+  }
+
+  lines.push('', '---', '', '## Prompt generati', '');
+  for (const obs of observations) {
+    lines.push(
+      `### ${obs.caseId} · ${obs.flow} · rep ${obs.rep} — ${obs.conformance.passed}/${obs.conformance.total}`,
+      '',
+      '```',
+      obs.text,
+      '```',
+      '',
+    );
+  }
+
+  mkdirSync('eval/output', { recursive: true });
+  const stamp = meta.started.toISOString().replace(/[:.]/g, '-');
+  // The mode is in the filename: comparing a single-flow run against a
+  // multi-flow one is the whole point, and mixing them up would invalidate it.
+  // A partial report is labelled too, so it can never be mistaken for a full one.
+  const suffix = `${BACKEND}-${MULTI ? 'multi' : 'single'}${meta.partial ? '-parziale' : ''}`;
+  const path = `eval/output/eval-${suffix}-${stamp}.md`;
+  writeFileSync(path, lines.join('\n'));
+  if (!meta.partial) writeFileSync(`eval/output/latest-${suffix}.md`, lines.join('\n'));
+  console.log(`\nReport in ${path}`);
 }
 
 async function main() {
@@ -530,6 +719,19 @@ async function main() {
 
   const fingerprint = runFingerprint();
   const resumed = loadCheckpoint(fingerprint);
+
+  // Read the checkpoint and render, without spending a single call. The escape
+  // hatch for a block that was killed: its observations were already on disk,
+  // but only as JSON, and reading them meant opening the file by hand.
+  if (process.env.EVAL_REPORT_ONLY === '1') {
+    if (resumed.length === 0) {
+      console.error(`Nessun checkpoint utilizzabile in ${CHECKPOINT_PATH} per questa configurazione.`);
+      process.exit(2);
+    }
+    console.log(`Report da checkpoint: ${resumed.length} osservazioni, nessuna chiamata all'API.`);
+    emitReport(resumed, [], [], { started, casesCount: cases.length, engine, mode, partial: true });
+    return;
+  }
   const done = new Set(resumed.map((o) => `${o.caseId}|${o.flow}|${o.rep}`));
   const todo = total - done.size;
 
@@ -540,6 +742,7 @@ async function main() {
   // Pre-flight on the local ledger. Starting a run that cannot finish wastes the
   // very quota it needs: the free tier's 500 daily requests are the binding
   // constraint, and a block that dies at 90% still spent 90% of the calls.
+  seedQuotaFromEnv();
   const used = quotaUsed();
   console.log(
     `Quota (conteggio locale, non di Google): ${used}/${DAILY_CAP} oggi · ` +
@@ -640,87 +843,13 @@ async function main() {
     }
   }
 
-  const stats = aggregate(observations);
-
-  // --- console summary: the headline is the per-rule rate, nothing else ---
-  console.log('\n' + '='.repeat(60));
-  console.log('CONFORMITÀ PER REGOLA');
-  console.log('='.repeat(60));
-  for (const [flow, rules] of stats) {
-    console.log(`\n${flow.toUpperCase()} (${rules[0]?.total ?? 0} osservazioni)`);
-    for (const r of rules.sort((a, b) => pct(a.passed, a.total) - pct(b.passed, b.total))) {
-      const p = pct(r.passed, r.total);
-      console.log(
-        `  ${r.id.padEnd(28)} ${String(r.passed).padStart(3)}/${String(r.total).padEnd(3)} ${String(p).padStart(3)}%  ${p < WARN_THRESHOLD ? '⚠' : ''}`,
-      );
-    }
-  }
-  if (errors.length) console.log(`\n${errors.length} chiamate fallite (vedi il report).`);
-  if (jsonFailures.length) {
-    console.log(`${jsonFailures.length} risposte con JSON non conforme — artefatto del backend, non violazioni di regola.`);
-  }
-
-  // --- markdown report, with the evidence for every failure ---
-  const lines: string[] = [
-    '# Eval di conformità',
-    '',
-    `Backend: **${BACKEND}** · Modello: \`${engine}\` · Modalità: **${mode}** · Casi: ${cases.length} · Ripetizioni: ${REPS} · Avvio: ${started.toISOString()}`,
-    '',
-    '> I numeri servono a **falsificare** una regola, non a certificarla. Confronta il',
-    '> **delta** tra due esecuzioni (prima/dopo una modifica ai meta-prompt), non il livello.',
-    ...renderTable(stats),
-  ];
-
-  for (const [flow, rules] of stats) {
-    const failing = rules.filter((r) => r.failures.length > 0);
-    if (failing.length === 0) continue;
-    lines.push('', `### Violazioni — ${flow}`, '');
-    for (const r of failing) {
-      lines.push(`**\`${r.id}\`** — ${r.label}`, '');
-      for (const f of r.failures.slice(0, 10)) {
-        lines.push(`- \`${f.caseId}\`${f.evidence ? `: ${f.evidence}` : ''}`);
-      }
-      if (r.failures.length > 10) lines.push(`- …e altre ${r.failures.length - 10}`);
-      lines.push('');
-    }
-  }
-
-  if (errors.length) {
-    lines.push('', '## Chiamate fallite', '', ...errors.map((e) => `- ${e}`));
-  }
-  if (jsonFailures.length) {
-    lines.push(
-      '',
-      '## Risposte con JSON non conforme',
-      '',
-      '> Artefatto del **backend**, non violazioni di regola: senza `responseSchema` la',
-      '> forma JSON è solo richiesta, non imposta. Contate a parte per non falsare il confronto.',
-      '',
-      ...jsonFailures.map((e) => `- ${e}`),
-    );
-  }
-
-  lines.push('', '---', '', '## Prompt generati', '');
-  for (const obs of observations) {
-    lines.push(
-      `### ${obs.caseId} · ${obs.flow} · rep ${obs.rep} — ${obs.conformance.passed}/${obs.conformance.total}`,
-      '',
-      '```',
-      obs.text,
-      '```',
-      '',
-    );
-  }
-
-  mkdirSync('eval/output', { recursive: true });
-  const stamp = started.toISOString().replace(/[:.]/g, '-');
-  // The mode is in the filename: comparing a single-flow run against a
-  // multi-flow one is the whole point, and mixing them up would invalidate it.
-  const suffix = `${BACKEND}-${MULTI ? 'multi' : 'single'}`;
-  const path = `eval/output/eval-${suffix}-${stamp}.md`;
-  writeFileSync(path, lines.join('\n'));
-  writeFileSync(`eval/output/latest-${suffix}.md`, lines.join('\n'));
-  console.log(`\nReport in ${path} (e eval/output/latest.md).`);
+  emitReport(observations, errors, jsonFailures, {
+    started,
+    casesCount: cases.length,
+    engine,
+    mode,
+    partial: false,
+  });
 
   // The checkpoint is dropped only when the block is genuinely COMPLETE.
   // Reaching the last case is not the same thing: transient 500/503 replies from

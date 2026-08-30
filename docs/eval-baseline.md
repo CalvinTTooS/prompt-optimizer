@@ -6,7 +6,29 @@ riproducibili rilanciando l'harness, e restano gitignorati. I *tassi misurati in
 una certa data con un certo codice*, invece, non sono riproducibili — e stanno in
 venti righe.
 
-> ## 🔒 Il verificatore è CONGELATO — decisione del 2026-08-29
+> ## ✅ Decisione presa il 2026-08-30 — i 4 interpretativi sono SEPARATI
+>
+> Il congelamento è sciolto. I quattro check che richiedono giudizio —
+> `gemini.concreteCommands`, `gemini.noGenericPhrases`, `*.noUserQuestions`,
+> `sysusr.noDuplication` — **restano attivi ma sono riportati a parte** e **non
+> entrano nel tasso di conformità**.
+>
+> | | Strutturali (20) | Interpretativi (4) |
+> |---|---|---|
+> | Falsi positivi prodotti | **0** | **3 su 3** |
+> | Oscillazione a configurazione identica | **0 osservazioni** | fino a **4 su 30** |
+>
+> Non cancellati: `concreteCommands` al 70% è ciò che ha smascherato un difetto
+> vero della regola 4 di `FLOW_GEMINI`. Non tenuti alla pari: mediare una misura
+> che non si muove mai con una che balla di quattro punti produce un numero che
+> non descrive nessuna delle due.
+>
+> **Da qui in avanti**: il totale di testa è la *conformità strutturale*. Uno
+> scostamento di poche osservazioni fra gli indicatori **non è una regressione**.
+>
+> ---
+>
+> ## 🔒 (storico) Il verificatore era CONGELATO — decisione del 2026-08-29
 >
 > Nessuna modifica ai check finché non sono chiusi i punti ancora aperti
 > dell'audit (L4, L5, L10). **Non si cambia il metro mentre si misura**: con uno
