@@ -457,6 +457,91 @@ scritta.
 
 ---
 
+## Run 16 — 2026-08-30 · verifica di L10 (spiegazione ancorata) · ⭐ chiude l'audit
+
+| | |
+|---|---|
+| Commit misurato | `cf2ec18` |
+| Modello | `gemini-3.5-flash-lite` (fissato) |
+| Corpus | 66 casi · K=3 · **198 osservazioni** · 1320 controlli · **0 errori** |
+| Esito | **1317/1320 superati (99,8%)** |
+
+Prima run completata **al primo tentativo**, senza interruzioni: la catena dei sei
+blocchi è andata in fondo da sola.
+
+**Cosa è cambiato**: il campo `spiegazione` da prosa libera a lista di migliorie
+ancorate (`regola`, `dove` verbatim, `cosa`), più due check nuovi. I controlli per
+osservazione salgono da ~5 a ~6-12, quindi il **totale** non è confrontabile con
+le run precedenti: si confrontano le singole regole.
+
+### Tassi per regola
+
+| Flusso | Regola | Conformi | % |
+|---|---|---|---|
+| chat | tutte e 4 + `spiegazione.present` + `grounded` | 42/42 | **100%** |
+| code | **`code.contextFirst`** | 29/30 | 97% |
+| code | **`spiegazione.grounded`** | 29/30 | 97% |
+| code | le altre 10 | 30/30 | 100% |
+| cowork | tutte e 4 + le due di spiegazione | 24/24 | **100%** |
+| systemUser | tutte e 3 + le due di spiegazione | 54/54 | **100%** |
+| gemini | **`noGenericPhrases`** | 29/30 | 97% |
+| gemini | le altre 5 + le due di spiegazione | 30/30 | **100%** |
+| scaffold | tutte e 3 | 18/18 | **100%** |
+
+### ✅ Le citazioni sono ancorate: 179 su 180
+
+`spiegazione.grounded` — **99,4%**. Un solo fallimento in tutta la run, e non è
+un'invenzione:
+
+| | |
+|---|---|
+| Input (`code-genera-docs`) | *"…dai docstring del modulo **services/** e salvala in **docs/api.md**."* |
+| Citato | `"services/ e docs/api.md"` |
+
+Il modello ha **fuso due frammenti veri** in una stringa che nel prompt non
+esisteva. Entrambi i pezzi ci sono; quella sequenza no.
+
+**Previsione sbagliata, registrata come tale**: prima della run avevo scritto di
+aspettarmi parafrasi diffuse e un tasso mediocre. Il modello copia verbatim 179
+volte su 180.
+
+### ⚠️ Cosa questo numero NON dice
+
+`grounded` verifica che la citazione **esista**, non che sia **pertinente**. Un
+modello che citasse sempre la prima frase del prompt otterrebbe comunque il 100%.
+Il check chiude la porta alla fabbricazione, non alla banalità.
+
+L'affermazione difendibile è quindi: *il modello non inventa punti*. Se le
+migliorie dichiarate siano davvero quelle applicate è fuori dalla portata di un
+parser, e ricadrebbe fra i check interpretativi — quelli che oscillano.
+
+### Gli altri due scarti
+
+- `gemini.noGenericPhrases` 29/30: dentro la banda di rumore misurata il
+  2026-08-30 (26-30 su configurazioni identiche). **Non interpretabile.**
+- `code.contextFirst` 29/30: era stabile al 100%. Una sola osservazione su una
+  regola strutturale — da riguardare alla prossima run, non da correggere ora.
+
+### Stato dell'audit
+
+**Tutti e dieci i punti sono chiusi**: L1 · L2 · L3 · L4 · L5 · L6 · L7 · L8 ·
+L9 · L10.
+
+### 🔲 La misura che manca ancora
+
+La modalità **multi-flusso** (`EVAL_MULTI=1`) — cinque formati richiesti in
+**una sola chiamata**, che è ciò che accade quando l'utente spunta più caselle —
+è stata misurata **una volta sola, il 2026-08-27**, su un solo flusso e con i
+meta-prompt di allora: prima della riscrittura L3, prima di L4, L5, L9 e L10.
+Quel dato è obsoleto.
+
+È l'unico caso d'uso reale che non abbiamo mai verificato sul codice attuale, ed
+è anche quello più esposto al troncamento (`TruncatedResponseError` esiste
+proprio per questo). Le run 1-16 misurano tutte il **caso migliore**: un formato
+per chiamata.
+
+---
+
 ## Come registrare una run futura
 
 1. Eseguire **a blocchi**, un flusso per volta (`EVAL_FLOW=<flusso>` in sequenza).

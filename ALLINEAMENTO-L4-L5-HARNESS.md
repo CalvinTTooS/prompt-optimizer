@@ -1,11 +1,11 @@
-# Allineamento del fork — lavoro successivo alla v1.2.0
+# Allineamento del fork — lavoro successivo alla v1.2.0 (L4, L5, L10, harness)
 
 Guida passo passo per replicare **identicamente** su un altro fork le modifiche
 fatte fra il 2026-08-28 e il 2026-08-30. Presuppone che
 `ALLINEAMENTO-CONFORMANCE-v1.2.0.md` sia **già stato applicato**: se non lo è,
 applica prima quello.
 
-Nove commit, in ordine:
+Dieci commit, in ordine:
 
 | Commit | Cosa |
 |---|---|
@@ -18,8 +18,9 @@ Nove commit, in ordine:
 | `f126a88` | harness: ripartibile, ritento, pre-flight quota |
 | `7ba0c21` | **L4** — separazione istruzioni/input |
 | `488948a` | harness: 429 non ritentati, chiave dichiarata, stop su chiave invalida |
+| `cf2ec18` | **L10** — spiegazione ancorata (lista di migliorie + check `grounded`) |
 
-**Due soli toccano il prodotto** (L4 e L5). Gli altri sette riguardano lo
+**Tre toccano il prodotto** (L4, L5 e L10). Gli altri riguardano lo
 strumento di misura e la documentazione: utili, ma non cambiano ciò che l'utente
 riceve.
 
@@ -305,6 +306,79 @@ vi.mock('../lib/promptOptimizer', async (importOriginal) => ({
 
 ---
 
+### B7 · L10 — la `spiegazione` diventa una lista di migliorie ancorate
+
+**B7.1 · `app/lib/promptOptimizer.ts`** — aggiungi il valore riservato e il tipo,
+prima di `OptimizerResult`:
+
+```ts
+/**
+ * Reserved value for `dove` when an improvement genuinely has no single anchor.
+ * Without it the schema would force a lie: "the prompt was ambiguous throughout,
+ * I rewrote it" and "I did NOT add examples because the task is open-ended" are
+ * both legitimate and neither has a quotable point. A model made to fill the
+ * field anyway invents one, and a fabricated citation is worse than an
+ * undeclared improvement: it reads as more credible for being formatted like
+ * evidence.
+ */
+export const SCOPE_GLOBALE = '(tutto il prompt)';
+
+export interface Miglioria {
+  regola: string;
+  dove: string;
+  cosa: string;
+}
+```
+
+Poi cambia il tipo del campo: `spiegazione: Miglioria[];`
+
+**B7.2** — In `buildResponseSchema`, sostituisci la proprietà `spiegazione`:
+
+```ts
+    spiegazione: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          regola: { type: SchemaType.STRING },
+          dove: { type: SchemaType.STRING },
+          cosa: { type: SchemaType.STRING },
+        },
+        required: ['regola', 'dove', 'cosa'],
+      },
+    },
+```
+
+**B7.3** — Sostituisci l'ultima riga di `buildOptimizerSystemInstruction`:
+
+```
+      Nel campo "spiegazione" elenca le migliorie apportate, una voce per miglioria. Per ciascuna: "regola" è la regola del flusso che hai applicato; "dove" è la citazione del punto del prompt originale su cui agisce, copiata VERBATIM, carattere per carattere, così com'è nel testo dell'utente; "cosa" è la modifica che hai fatto. Se una miglioria riguarda il prompt nel suo insieme e non un punto citabile — l'hai riscritto perché ambiguo, oppure hai deciso di NON fare qualcosa — scrivi in "dove" esattamente ${SCOPE_GLOBALE}. Una citazione inventata è peggio di una miglioria non dichiarata: sembra una prova pur non essendolo, quindi quando non c'è un punto preciso usa ${SCOPE_GLOBALE} invece di costruirne uno.
+```
+
+> ⚠️ **La via d'uscita non è opzionale.** Senza `SCOPE_GLOBALE` nominato
+> esplicitamente, lo schema costringe il modello a inventare un punto ogni volta
+> che la miglioria è globale o è una **non**-modifica.
+
+**B7.4 · `app/lib/conformance.ts`** — aggiungi il check `checkSpiegazione`
+(copia il file dal pacchetto). Verifica che ogni `dove` compaia nell'input,
+normalizzando gli spazi: una citazione spezzata su due righe resta fedele, e
+bocciarla punirebbe la formattazione invece della fabbricazione.
+
+> Rispetto al congelamento del verificatore: L10 **aggiunge** due check, non ne
+> modifica nessuno. Le baseline per-regola restano confrontabili; cambia il
+> **totale** dei controlli per osservazione, che quindi non va confrontato con
+> quello delle run precedenti.
+
+**B7.5 · `app/components/ResultViewer.tsx`** — da `<p>` a lista (copia dal
+pacchetto). Ogni voce mostra `cosa`, e sotto `regola` più la citazione.
+
+**B7.6 · `eval/run-eval.ts`** — l'harness **scartava** il campo, il che rendeva
+L10 non misurabile. Registralo e controllalo **contro l'input originale**, non
+contro il prompt generato: una citazione è ancorata quando cita ciò che l'utente
+ha scritto.
+
+---
+
 ## PARTE C — Harness (`eval/run-eval.ts`)
 
 Sette modifiche, tutte allo strumento di misura. **Non invalidano baseline**:
@@ -370,7 +444,8 @@ Poi una verifica funzionale in `npm run tauri dev`:
 |---|---|---|
 | 13 | L5 | 938/939 · 99,9% · fughe meta-prompt 3/191 |
 | 14 | L4 | 955/960 · 99,5% · **fughe 0/198** |
-| 15 | ripetizione `gemini` | `noGenericPhrases` 28/30 |
+| 15 | ripetizione `gemini` (configurazione identica alla 14) | `noGenericPhrases` 28/30 |
+| 16 | L10 | **1317/1320 · 99,8%** · `spiegazione.grounded` 179/180 |
 
 ⚠️ **`gemini.noGenericPhrases` oscilla**: 30 → 26 → 28 su configurazioni
 identiche (run 14 e 15). Se sul fork esce un valore in quell'intervallo **non è

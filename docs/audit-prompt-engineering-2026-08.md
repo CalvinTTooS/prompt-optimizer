@@ -90,20 +90,35 @@ nei **parametri API** invece che nel testo.
 
 ---
 
-## Stato dei dieci punti — aggiornato al 2026-08-29
+## Stato dei dieci punti — ✅ TUTTI CHIUSI al 2026-08-30
 
-| | Difetto | Stato |
-|---|---|---|
-| L1 | Ottimizziamo senza misurare | ✅ **chiuso** — harness, 66 casi, baseline versionata |
-| L2 | Costo del batching multi-formato | ✅ **chiuso** — modalità a flusso singolo, misurata |
-| L3 | Stile enfatico | ✅ **chiuso** — esito opposto al previsto |
-| L4 | Input non delimitato + `systemInstruction` nativo | ❌ aperto — **il più promettente** |
-| L5 | Due dialetti di segnaposto | ⚠️ implementato, **misurato su 3 flussi su 5** (run 13) |
-| L6 | Scheda CoT in-app superata | ✅ **chiuso** |
-| L7 | Linter che contraddice i flussi | ✅ **chiuso** |
-| L8 | Few-shot duplicato e incondizionato | ✅ **chiuso** — iniettato una volta sola |
-| L9 | `temperature: 0.5` su Gemini 3.x | ✅ **chiuso** — parametro rimosso |
-| L10 | "Spiegazione" non verificabile | ❌ aperto |
+| | Difetto | Stato | Misurato da |
+|---|---|---|---|
+| L1 | Ottimizziamo senza misurare | ✅ chiuso — harness, 66 casi, baseline versionata | — |
+| L2 | Costo del batching multi-formato | ✅ chiuso — modalità a flusso singolo | run 12 |
+| L3 | Stile enfatico | ✅ chiuso — **esito opposto al previsto** | run 2-4 |
+| L4 | Input non delimitato + `systemInstruction` nativo | ✅ chiuso — **fughe da 3/191 a 0/198** | run 14 |
+| L5 | Due dialetti di segnaposto | ✅ chiuso — adozione dal 98% allo 0% secondo il flusso | run 13 |
+| L6 | Scheda CoT in-app superata | ✅ chiuso | — |
+| L7 | Linter che contraddice i flussi | ✅ chiuso | — |
+| L8 | Few-shot duplicato e incondizionato | ✅ chiuso — iniettato una volta sola | run 12 |
+| L9 | `temperature: 0.5` su Gemini 3.x | ✅ chiuso — parametro rimosso | run 12 |
+| L10 | "Spiegazione" non verificabile | ✅ chiuso — **citazioni ancorate 179/180** | run 16 |
+
+**Stato finale**: run 16, **1317/1320 controlli superati (99,8%)**, 198
+osservazioni, zero errori.
+
+**Due cose che l'audit non aveva previsto e che le misure hanno prodotto:**
+
+1. **La salienza batte l'intensità** (L3). Togliere le maiuscole fece *crollare*
+   `code.claudeMd` dal 93% al 57%; dare all'istruzione una **regola numerata
+   propria**, senza una sola maiuscola, la portò al 100%. Le maiuscole non
+   davano forza: davano **posizione**.
+2. **Il rumore va misurato prima di chiamarlo rumore.** Ripetendo la stessa
+   identica configurazione, `gemini.noGenericPhrases` è oscillato di 2
+   osservazioni su 30. Per giorni avevamo liquidato scostamenti da 1 osservazione
+   come variabilità **senza averla mai quantificata**. I 12 check strutturali,
+   nello stesso periodo, non si sono mossi di un'osservazione.
 
 **Perché L9 è ora prioritario**: non è più solo una raccomandazione di Google, è
 un **problema di validità della misura**. L'harness gira **senza** `temperature`,
