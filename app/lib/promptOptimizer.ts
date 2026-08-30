@@ -8,8 +8,33 @@ export interface OptimizerFlows {
   genGemini: boolean;
 }
 
+/**
+ * Reserved value for `dove` when an improvement genuinely has no single anchor.
+ *
+ * Without it the schema would force a lie: not every improvement has the shape
+ * (rule, place, change) — "the prompt was ambiguous throughout, I rewrote it" and
+ * "I did NOT add examples because the task is open-ended" are both legitimate and
+ * neither has a quotable point. A model made to fill the field anyway invents
+ * one, and a fabricated citation is worse than an undeclared improvement: it
+ * reads as more credible precisely because it is formatted like evidence.
+ */
+export const SCOPE_GLOBALE = '(tutto il prompt)';
+
+/**
+ * One declared improvement, anchored so it can be checked.
+ *
+ * `dove` is a VERBATIM quote from the user's input — that is the whole point.
+ * A parser can verify a quote against the input; it cannot verify a paraphrase,
+ * and it cannot verify prose that claims "I improved clarity".
+ */
+export interface Miglioria {
+  regola: string;
+  dove: string;
+  cosa: string;
+}
+
 export interface OptimizerResult {
-  spiegazione: string;
+  spiegazione: Miglioria[];
   promptChat?: string;
   promptCowork?: string;
   promptCode?: string;
@@ -30,7 +55,18 @@ export interface GenerativeResponseLike {
  */
 export function buildResponseSchema(flows: OptimizerFlows): ObjectSchema {
   const properties: ObjectSchema['properties'] = {
-    spiegazione: { type: SchemaType.STRING },
+    spiegazione: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          regola: { type: SchemaType.STRING },
+          dove: { type: SchemaType.STRING },
+          cosa: { type: SchemaType.STRING },
+        },
+        required: ['regola', 'dove', 'cosa'],
+      },
+    },
   };
   const required: string[] = ['spiegazione'];
 
@@ -125,7 +161,7 @@ ${examplesBlock}
 
       Vincolo comune a tutti i flussi — leggibilità: separa con una riga vuota le sezioni di primo livello, sia i tag (es. <role>, <context>, <output_format>) sia gli heading Markdown, tenendo ogni tag sulla propria riga. Il prompt generato viene letto e modificato a mano dall'utente, quindi la spaziatura è parte del risultato.
 
-      Nel campo "spiegazione" descrivi brevemente le migliorie apportate, riferendole ai formati richiesti.`;
+      Nel campo "spiegazione" elenca le migliorie apportate, una voce per miglioria. Per ciascuna: "regola" è la regola del flusso che hai applicato; "dove" è la citazione del punto del prompt originale su cui agisce, copiata VERBATIM, carattere per carattere, così com'è nel testo dell'utente; "cosa" è la modifica che hai fatto. Se una miglioria riguarda il prompt nel suo insieme e non un punto citabile — l'hai riscritto perché ambiguo, oppure hai deciso di NON fare qualcosa — scrivi in "dove" esattamente ${SCOPE_GLOBALE}. Una citazione inventata è peggio di una miglioria non dichiarata: sembra una prova pur non essendolo, quindi quando non c'è un punto preciso usa ${SCOPE_GLOBALE} invece di costruirne uno.`;
 }
 
 export class TruncatedResponseError extends Error {

@@ -13,6 +13,8 @@
 // Shared by the in-app badge and by the offline eval harness, so the same
 // definition of "conformant" governs both.
 
+import { SCOPE_GLOBALE, type Miglioria } from './promptOptimizer';
+
 export type ConformanceFlow =
   | 'chat'
   | 'cowork'
@@ -404,6 +406,58 @@ export function checkGemini(text: string): ConformanceResult {
   checks.push(checkAnonymizationIntact(text));
 
   return result('gemini', checks);
+}
+
+// --- The declared improvements ---------------------------------------------
+
+/**
+ * Checks that every declared improvement is ANCHORED: that its `dove` really is
+ * a quote from the user's input, and not something the model composed.
+ *
+ * Why this check has to exist alongside the structured field, not after it: a
+ * schema guarantees the three fields are filled, never that they say anything.
+ * Without verification we would have swapped unfalsifiable prose ("I improved
+ * clarity") for unfalsifiable structure ({ dove: "the original prompt" }) — the
+ * same defect, better dressed, and more persuasive for being formatted like
+ * evidence.
+ *
+ * Note which family this belongs to: "is this string present in that string" is
+ * decidable by a parser, with no interpretation. It sits with the 12 structural
+ * checks that have not moved by a single observation across three runs, not with
+ * the 4 interpretive ones that oscillate.
+ */
+export function checkSpiegazione(
+  spiegazione: Miglioria[] | undefined,
+  input: string,
+): ConformanceCheck[] {
+  if (!Array.isArray(spiegazione) || spiegazione.length === 0) {
+    return [ko('spiegazione.present', 'Dichiara almeno una miglioria', 'campo assente o vuoto')];
+  }
+
+  // Compared on normalised whitespace: a quote that differs only by a line break
+  // or a run of spaces is still a faithful citation, and failing it would punish
+  // formatting rather than fabrication.
+  const haystack = normalizeForQuote(input);
+  const fabricated = spiegazione.filter((m) => {
+    const dove = (m.dove ?? '').trim();
+    if (dove === SCOPE_GLOBALE || dove === '') return false;
+    return !haystack.includes(normalizeForQuote(dove));
+  });
+
+  return [
+    ok('spiegazione.present', 'Dichiara almeno una miglioria'),
+    fabricated.length === 0
+      ? ok('spiegazione.grounded', 'Ogni citazione compare davvero nel prompt in ingresso')
+      : ko(
+          'spiegazione.grounded',
+          'Ogni citazione compare davvero nel prompt in ingresso',
+          `non trovate: ${fabricated.map((m) => `"${m.dove}"`).slice(0, 3).join(' · ')}`,
+        ),
+  ];
+}
+
+function normalizeForQuote(s: string): string {
+  return s.replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
 // --- Scaffold: the "Progetto" section Gemini fills in ----------------------

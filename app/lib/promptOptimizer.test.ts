@@ -6,8 +6,33 @@ import {
   parseOptimizerResponse,
   wrapUserInput,
   USER_INPUT_FRAMING,
+  SCOPE_GLOBALE,
   TruncatedResponseError,
 } from './promptOptimizer';
+
+describe('spiegazione strutturata (L10)', () => {
+  test('the schema asks for a list of anchored improvements, not free prose', () => {
+    const schema = buildResponseSchema({ genChat: true, genCowork: false, genCode: false, genSystemUser: false, genGemini: false });
+    const spiegazione = schema.properties.spiegazione as {
+      type: string;
+      items: { properties: Record<string, unknown>; required: string[] };
+    };
+
+    expect(spiegazione.type).toBe('array');
+    expect(Object.keys(spiegazione.items.properties)).toEqual(['regola', 'dove', 'cosa']);
+    // All three required: an improvement without its anchor is exactly the
+    // unverifiable claim L10 exists to remove.
+    expect(spiegazione.items.required).toEqual(['regola', 'dove', 'cosa']);
+  });
+
+  test('the instruction demands a verbatim quote and offers a way out', () => {
+    const instruction = buildOptimizerSystemInstruction(['REGOLE']);
+    expect(instruction).toContain('VERBATIM');
+    // The escape hatch must be named, or the model invents an anchor when the
+    // improvement genuinely has none.
+    expect(instruction).toContain(SCOPE_GLOBALE);
+  });
+});
 
 describe('wrapUserInput', () => {
   test('delimits the text without altering it', () => {

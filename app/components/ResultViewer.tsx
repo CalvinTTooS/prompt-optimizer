@@ -11,6 +11,7 @@ import {
   checkSystemUser,
   type ConformanceResult,
 } from '../lib/conformance';
+import { SCOPE_GLOBALE } from '../lib/promptOptimizer';
 import { extractPlaceholders } from '../lib/placeholders';
 import { toast } from '../lib/toast';
 import { useT } from '../hooks/useT';
@@ -324,7 +325,25 @@ export function ResultViewer({
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="bg-white p-8 rounded-3xl border border-blue-100 shadow-lg">
         <h2 className="text-xs font-black text-blue-600 uppercase mb-3 tracking-widest">{t('result.technicalAnalysis')}</h2>
-        <p className="text-gray-700 italic leading-relaxed">&quot;{result.spiegazione}&quot;</p>
+        {/* Each improvement is shown WITH its anchor: the rule applied and the
+            quoted point it acts on. The quote is what makes the claim checkable
+            by the reader, the same way it makes it checkable by the harness — a
+            generic "I improved clarity" is true of every optimization and so
+            carries no information. */}
+        <ul className="space-y-4">
+          {(result.spiegazione ?? []).map((m, i) => (
+            <li key={`${m.regola}-${i}`} className="border-l-2 border-blue-200 pl-4">
+              <p className="text-gray-800 leading-relaxed">{m.cosa}</p>
+              <p className="mt-1 text-xs text-gray-500">
+                <span className="font-mono font-semibold text-blue-700">{m.regola}</span>
+                {m.dove && m.dove !== SCOPE_GLOBALE && (
+                  <> · <span className="italic">&quot;{m.dove}&quot;</span></>
+                )}
+                {m.dove === SCOPE_GLOBALE && <> · <span className="italic">{m.dove}</span></>}
+              </p>
+            </li>
+          ))}
+        </ul>
       </div>
 
       {variableKeys.length > 0 && (

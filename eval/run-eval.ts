@@ -45,6 +45,7 @@ import {
   wrapUserInput,
   USER_INPUT_FRAMING,
   type OptimizerFlows,
+  type Miglioria,
 } from '../app/lib/promptOptimizer';
 import {
   checkChat,
@@ -53,6 +54,7 @@ import {
   checkSystemUser,
   checkGemini,
   checkScaffoldProject,
+  checkSpiegazione,
   type ConformanceResult,
 } from '../app/lib/conformance';
 
@@ -311,7 +313,7 @@ const FLOW_INSTR: Record<OptFlow, string> = {
 
 /** The optimizer response shape, shared by both backends. */
 type OptimizerResultLike = {
-  spiegazione?: string;
+  spiegazione?: Miglioria[];
   promptChat?: string;
   promptCowork?: string;
   promptCode?: string;
@@ -397,21 +399,31 @@ async function generateAndCheck(flow: EvalFlow, input: string): Promise<{ text: 
     parsed = parseOptimizerResponse({ text: response.response.text(), finishReason });
   }
 
+  // The declared improvements are checked against the ORIGINAL input, not the
+  // generated prompt: a citation is grounded when it quotes what the user wrote.
+  // The harness used to discard this field entirely, which made L10 impossible
+  // to measure — a rule nobody verifies is a rule nobody follows.
+  const spiegazione = checkSpiegazione(parsed.spiegazione, input);
+  const withSpiegazione = (r: ConformanceResult): ConformanceResult => {
+    const checks = [...r.checks, ...spiegazione];
+    return { ...r, checks, passed: checks.filter((c) => c.passed).length, total: checks.length };
+  };
+
   switch (flow) {
     case 'chat':
-      return { text: parsed.promptChat ?? '', conformance: checkChat(parsed.promptChat ?? '') };
+      return { text: parsed.promptChat ?? '', conformance: withSpiegazione(checkChat(parsed.promptChat ?? '')) };
     case 'cowork':
-      return { text: parsed.promptCowork ?? '', conformance: checkCowork(parsed.promptCowork ?? '') };
+      return { text: parsed.promptCowork ?? '', conformance: withSpiegazione(checkCowork(parsed.promptCowork ?? '')) };
     case 'code':
-      return { text: parsed.promptCode ?? '', conformance: checkCode(parsed.promptCode ?? '') };
+      return { text: parsed.promptCode ?? '', conformance: withSpiegazione(checkCode(parsed.promptCode ?? '')) };
     case 'gemini':
-      return { text: parsed.promptGemini ?? '', conformance: checkGemini(parsed.promptGemini ?? '') };
+      return { text: parsed.promptGemini ?? '', conformance: withSpiegazione(checkGemini(parsed.promptGemini ?? '')) };
     case 'systemUser': {
       const system = parsed.promptSystem ?? '';
       const user = parsed.promptUser ?? '';
       return {
         text: `--- SYSTEM ---\n${system}\n\n--- USER ---\n${user}`,
-        conformance: checkSystemUser(system, user),
+        conformance: withSpiegazione(checkSystemUser(system, user)),
       };
     }
   }

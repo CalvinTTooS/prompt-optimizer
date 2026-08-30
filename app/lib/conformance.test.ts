@@ -6,8 +6,73 @@ import {
   checkSystemUser,
   checkGemini,
   checkScaffoldProject,
+  checkSpiegazione,
   type ConformanceResult,
 } from './conformance';
+import { SCOPE_GLOBALE } from './promptOptimizer';
+
+describe('checkSpiegazione', () => {
+  const input = 'Scrivi una mail al cliente Mario Rossi per il ritardo della consegna.';
+
+  it('accepts a verbatim quote from the input', () => {
+    const checks = checkSpiegazione(
+      [{ regola: 'chat.tags', dove: 'ritardo della consegna', cosa: 'ho aggiunto <context>' }],
+      input,
+    );
+    expect(checks.find((c) => c.id === 'spiegazione.grounded')?.passed).toBe(true);
+  });
+
+  it('rejects a citation the input never contained', () => {
+    // The defect L10 exists to catch: a claim formatted like evidence, which
+    // reads as MORE credible than vague prose precisely because it is quoted.
+    const checks = checkSpiegazione(
+      [{ regola: 'chat.tags', dove: 'la scadenza del contratto', cosa: 'ho aggiunto <context>' }],
+      input,
+    );
+    const grounded = checks.find((c) => c.id === 'spiegazione.grounded');
+    expect(grounded?.passed).toBe(false);
+    expect(grounded?.evidence).toContain('la scadenza del contratto');
+  });
+
+  it('accepts the reserved value for improvements with no single anchor', () => {
+    // Without this escape the schema would force a lie on every global rewrite
+    // and on every deliberate NON-change.
+    const checks = checkSpiegazione(
+      [{ regola: 'chat.tags', dove: SCOPE_GLOBALE, cosa: 'riscritto, era ambiguo ovunque' }],
+      input,
+    );
+    expect(checks.find((c) => c.id === 'spiegazione.grounded')?.passed).toBe(true);
+  });
+
+  it('tolerates whitespace differences in the quote', () => {
+    // A quote broken across lines is still faithful: failing it would punish
+    // formatting instead of fabrication.
+    const checks = checkSpiegazione(
+      [{ regola: 'chat.tags', dove: 'cliente Mario\n  Rossi', cosa: 'ho aggiunto <context>' }],
+      input,
+    );
+    expect(checks.find((c) => c.id === 'spiegazione.grounded')?.passed).toBe(true);
+  });
+
+  it('fails when the field is missing or empty', () => {
+    expect(checkSpiegazione(undefined, input)[0].passed).toBe(false);
+    expect(checkSpiegazione([], input)[0].passed).toBe(false);
+  });
+
+  it('reports every fabricated citation, not just the first', () => {
+    const checks = checkSpiegazione(
+      [
+        { regola: 'a', dove: 'Mario Rossi', cosa: 'ok' },
+        { regola: 'b', dove: 'inventata uno', cosa: 'x' },
+        { regola: 'c', dove: 'inventata due', cosa: 'y' },
+      ],
+      input,
+    );
+    const evidence = checks.find((c) => c.id === 'spiegazione.grounded')?.evidence ?? '';
+    expect(evidence).toContain('inventata uno');
+    expect(evidence).toContain('inventata due');
+  });
+});
 
 /** Helper: is a given check id passing in this result? */
 const passed = (r: ConformanceResult, id: string) =>
